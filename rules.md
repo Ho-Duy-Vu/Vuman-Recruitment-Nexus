@@ -556,3 +556,60 @@ async function changeStage(applicationId, newStage, hrId) {
 ---
 
 *End of rules.md — Cursor must read and apply ALL rules before generating any code.*
+
+---
+
+## 14. DEMO vs PRODUCTION STRATEGY
+
+This project is built in DEMO MODE. Some features use simplified implementations
+that are explicitly designed for easy production upgrade later.
+
+### Email Verification — Demo Mode (CURRENT)
+
+```javascript
+// DEMO: No real email sent.
+// registerCandidate() returns emailVerifyToken directly in API response.
+// Frontend calls /api/auth/verify-email with token automatically after register.
+
+// Response shape for demo:
+{
+  success: true,
+  data: {
+    user: { _id, email, fullName, role, emailVerified: false },
+    emailVerifyToken: "eyJhbGci..."  // exposed for demo only
+  }
+}
+```
+
+```javascript
+// PRODUCTION UPGRADE PATH (future — zero backend changes):
+// 1. Remove emailVerifyToken from register response
+// 2. Add: await emailService.sendVerifyEmail(user.email, token)
+// 3. verifyEmail() logic stays 100% identical
+```
+
+### Email Verify Token — Use JWT (not crypto.randomBytes)
+
+```javascript
+// Payload: { sub: userId, purpose: 'email-verify' }
+// Secret:  CAND_JWT_SECRET
+// Expiry:  24h
+// Store:   raw token saved to user.emailVerifyToken in DB
+// Verify:  jwt.verify() + check purpose === 'email-verify' + check DB field matches token
+// Cleanup: set emailVerifyToken = null after successful verify (prevent reuse)
+```
+
+### What MUST NOT be simplified even in demo
+
+```
+- JWT secrets      → always separate, always expire correctly
+- Password hashing → always bcrypt rounds 12
+- Refresh token    → always rotate on every use
+- Role guards      → never skip authorize() middleware
+- CV file access   → always require auth + ownership check
+- Socket auth      → always verify JWT on handshake
+```
+
+---
+
+*End of rules.md — Cursor must read and apply ALL rules before generating any code.*

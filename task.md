@@ -21,7 +21,7 @@
 
 ---
 
-### TASK 01 — Project Scaffold & App Bootstrap
+### TASK 01 — Project Scaffold & App Bootstrap ✅ DONE
 - [x] Init `server/` with `npm init`, install all backend dependencies
 - [x] Init `client/` with Vite React template, install all frontend dependencies
 - [x] Create full folder structure as defined in `rules.md` section 2
@@ -35,39 +35,44 @@
 - [x] Create `.env.example` with all required variable names (no values)
 - [x] Create `.gitignore` — include `.env`, `uploads/`, `node_modules/`
 
-**Acceptance:** `node app.js` starts without error, connects to MongoDB and Redis.
+**Acceptance:** `node app.js` starts without error, connects to MongoDB and Redis. ✅
 
 ---
 
-### TASK 02 — User Model & Repository
-- [ ] Create `User.model.js` with discriminator pattern:
+### TASK 02 — User Model & Repository ✅ DONE
+- [x] Create `User.model.js` with discriminator pattern:
   - Base fields: `email` (unique), `passwordHash`, `role` (enum: admin|hr|candidate), `isActive`, `refreshToken` (hashed), `timestamps`
   - HR extra fields: `fullName`, `department`, `mustChangePassword`
   - Candidate extra fields: `fullName`, `phone`, `emailVerified`, `emailVerifyToken`, `emailVerifyExpires`
   - `toJSON()` override: delete `passwordHash`, `refreshToken`, `emailVerifyToken`
-- [ ] Add indexes: `{ email: 1 }` unique
-- [ ] Create `user.repository.js`:
+- [x] Add indexes: `{ email: 1 }` unique
+- [x] Create `user.repository.js`:
   - `findByEmail(email)` — select('-passwordHash -refreshToken')
   - `findById(id)` — select('-passwordHash -refreshToken')
   - `create(data)` → returns saved user
   - `updateById(id, updates)` → returns updated user
   - `findAllHR()` — filter role: 'hr'
 
-**Acceptance:** Can create, find, update user documents via repository.
+**Acceptance:** Can create, find, update user documents via repository. ✅
 
 ---
 
 ### TASK 03 — Auth Service + JWT Logic
-- [ ] Create `auth.service.js`:
+- [x] Create `auth.service.js`:
   - `generateAccessToken(user)` — payload `{sub, role}`, use correct secret per role, correct expiry
   - `generateRefreshToken(user)` — store hashed version in DB, return raw token
   - `verifyAccessToken(token, role)` — verify with correct secret
   - `hashPassword(plain)` — bcrypt rounds 12
   - `comparePassword(plain, hash)` — bcrypt compare
   - `loginHR(email, password)` — validate, return tokens
-  - `loginCandidate(email, password)` — validate, return tokens
+  - `loginCandidate(email, password)` — validate, check emailVerified, return tokens
   - `refreshAccessToken(rawRefreshToken)` — verify, rotate refresh token, return new access token
   - `revokeRefreshToken(userId)` — set refreshToken null in DB
+  - `generateEmailVerifyToken(userId)` — sign JWT with CAND_JWT_SECRET, payload `{sub, purpose: 'email-verify'}`, exp 24h, save token to `emailVerifyToken` field in DB
+
+> **Demo strategy:** Email verify uses JWT token stored in DB.
+> No real email sent in demo — token returned directly in API response.
+> Production upgrade path: wrap token in email link, zero backend changes needed.
 
 **Acceptance:** Unit-testable service, no HTTP dependencies.
 
@@ -116,18 +121,34 @@
 
 ---
 
-### TASK 06 — Candidate Register + Email Verify
-- [ ] Extend `auth.service.js`:
-  - `registerCandidate(email, password, fullName)` — hash pass, create user, generate verify token (crypto.randomBytes 32), send verify email
-  - `verifyEmail(token)` — find by hashed token, check expiry, set `emailVerified: true`
-- [ ] Create `email.service.js` (basic version — full version in Task 23):
-  - `sendVerifyEmail(to, verifyUrl)` — Nodemailer, use template
-- [ ] Add to `auth.controller.js`:
-  - `registerCandidate(req, res)`
-  - `verifyEmail(req, res)`
-- [ ] Add routes: `POST /api/auth/register`, `GET /api/auth/verify-email?token=`
+### TASK 06 — Candidate Register + Email Verify (Demo Mode)
+> **Demo strategy:** No real email sent. Verify token returned directly in register response.
+> Frontend uses token to call verify endpoint automatically or displays it for manual testing.
+> Production upgrade: send token via email — backend logic unchanged.
 
-**Acceptance:** Candidate registers → receives email → clicks link → `emailVerified: true`.
+- [ ] Extend `auth.service.js`:
+  - `registerCandidate(email, password, fullName)`:
+    1. Hash password (bcrypt 12)
+    2. Create CandidateUser with `emailVerified: false`
+    3. Call `generateEmailVerifyToken(userId)` → get JWT token
+    4. Save token to `emailVerifyToken` field in DB
+    5. Return `{ user, emailVerifyToken }` — token exposed in response for demo
+  - `verifyEmail(token)`:
+    1. `jwt.verify(token, CAND_JWT_SECRET)` — check signature + expiry
+    2. Check `payload.purpose === 'email-verify'`
+    3. Check DB: `user.emailVerifyToken === token` (prevent token reuse after rotation)
+    4. Set `emailVerified: true`, clear `emailVerifyToken` field
+    5. Return updated user
+- [ ] Add to `auth.controller.js`:
+  - `registerCandidate(req, res)` — return `{ success: true, data: { user, emailVerifyToken } }`
+  - `verifyEmail(req, res)` — accept token from query param OR request body
+- [ ] Add routes:
+  - `POST /api/auth/register` → registerCandidate
+  - `POST /api/auth/verify-email` — body: `{ token }` (POST safer than GET for tokens)
+- [ ] NO email.service.js needed in this task — deferred to Task 23
+
+**Acceptance:** POST /api/auth/register → returns user + emailVerifyToken in response.
+POST /api/auth/verify-email with token → emailVerified: true. Login blocked until verified.
 
 ---
 
