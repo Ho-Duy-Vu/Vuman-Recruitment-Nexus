@@ -8,10 +8,10 @@ export const errorHandler = (err, req, res, next) => {
     if (error.name === 'CastError') {
       error = new AppError('Invalid ID format', 400)
     } else if (error.code === 11000) {
-      const fields = Object.keys(error.keyValue || {})
-      const field = fields[0] || 'field'
-      error = new AppError(`${field} already exists`, 409)
-    } else if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      error = new AppError('Already exists', 409)
+    } else if (error.name === 'TokenExpiredError') {
+      error = new AppError('Token expired', 401)
+    } else if (error.name === 'JsonWebTokenError') {
       error = new AppError('Invalid token', 401)
     } else {
       error = new AppError('Internal server error', 500)
@@ -22,6 +22,10 @@ export const errorHandler = (err, req, res, next) => {
   const response = {
     success: false,
     message: error.isOperational ? error.message : 'Internal server error'
+  }
+
+  if (error.errors && Array.isArray(error.errors)) {
+    response.errors = error.errors
   }
 
   if (env.nodeEnv !== 'production') {

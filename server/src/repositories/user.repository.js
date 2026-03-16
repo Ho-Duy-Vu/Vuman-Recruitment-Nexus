@@ -25,7 +25,7 @@ class UserRepository {
 
   async updateById(id, updates) {
     const user = await User.findByIdAndUpdate(id, updates, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true
     })
       .select('-passwordHash -refreshToken')
@@ -41,6 +41,25 @@ class UserRepository {
   async findAllHR() {
     const users = await User.find({ role: 'hr' }).select('-passwordHash -refreshToken').lean()
     return users
+  }
+
+  async findHRById(id) {
+    const user = await User.findOne({ _id: id, role: 'hr' })
+      .select('-passwordHash -refreshToken')
+      .lean()
+    if (!user) {
+      throw new AppError('User not found', 404)
+    }
+    return user
+  }
+
+  // Internal auth helper: service-only, returns sensitive fields (passwordHash)
+  async findAuthUserById(id) {
+    const user = await User.findById(id)
+    if (!user) {
+      throw new AppError('User not found', 404)
+    }
+    return user
   }
 
   // Internal auth helper: used only by auth.service, never returned directly to client
@@ -65,7 +84,7 @@ class UserRepository {
     const user = await User.findByIdAndUpdate(
       userId,
       { refreshToken: refreshTokenHash },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     )
       .select('-passwordHash -refreshToken')
       .lean()
@@ -81,9 +100,21 @@ class UserRepository {
     const user = await User.findByIdAndUpdate(
       userId,
       { refreshToken: null },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     )
       .select('-passwordHash -refreshToken')
+      .lean()
+
+    if (!user) {
+      throw new AppError('User not found', 404)
+    }
+
+    return user
+  }
+
+  async findByIdWithSensitiveFields(id) {
+    const user = await User.findById(id)
+      .select('+emailVerifyToken +passwordResetToken +passwordHash')
       .lean()
 
     if (!user) {

@@ -29,6 +29,10 @@ const userBaseSchema = new Schema(
     refreshToken: {
       type: String,
       default: null
+    },
+    passwordResetToken: {
+      type: String,
+      default: null
     }
   },
   {
@@ -36,8 +40,6 @@ const userBaseSchema = new Schema(
     discriminatorKey: 'role'
   }
 )
-
-userBaseSchema.index({ email: 1 }, { unique: true })
 
 userBaseSchema.methods.toJSON = function () {
   const obj = this.toObject()
@@ -82,7 +84,7 @@ const candidateUserSchema = new Schema(
     },
     phone: {
       type: String,
-      required: true,
+      required: false,
       trim: true
     },
     emailVerified: {
@@ -103,6 +105,23 @@ const candidateUserSchema = new Schema(
   }
 )
 
+const adminUserSchema = new Schema(
+  {
+    fullName: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    department: {
+      type: String,
+      required: true,
+      trim: true
+    }
+  },
+  { timestamps: true }
+)
+
+export const AdminUser = User.discriminator('admin', adminUserSchema, 'admin')
 export const HrUser = User.discriminator('hr', hrUserSchema, 'hr')
 export const CandidateUser = User.discriminator('candidate', candidateUserSchema, 'candidate')
 

@@ -1,13 +1,9 @@
 import dotenv from 'dotenv'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-
-// Load .env from project root (2 levels up from server/src/config)
+// Load .env from project root (2 levels up from server/)
 dotenv.config({
-  path: path.resolve(__dirname, '../../../.env')
+  path: path.resolve(process.cwd(), '../.env')
 })
 
 const requiredEnvVars = [
@@ -22,7 +18,8 @@ const requiredEnvVars = [
   'SMTP_USER',
   'SMTP_PASS',
   'CLIENT_URL',
-  'NODE_ENV'
+  'NODE_ENV',
+  'FILE_SIGN_SECRET'
 ]
 
 requiredEnvVars.forEach((key) => {
@@ -43,6 +40,6 @@ export const env = {
   smtpUser: process.env.SMTP_USER,
   smtpPass: process.env.SMTP_PASS,
   clientUrl: process.env.CLIENT_URL,
-  nodeEnv: process.env.NODE_ENV || 'development'
+  nodeEnv: process.env.NODE_ENV || 'development',
+  fileSignSecret: process.env.FILE_SIGN_SECRET
 }
-

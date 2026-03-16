@@ -143,7 +143,7 @@ messages, interviewSchedules, emailLogs, fileMetadata
 
 ### API Routes (kebab-case, RESTful)
 ```
-POST   /api/auth/login
+POST   /api/auth/login          ← single endpoint, role detected from DB
 POST   /api/auth/register
 POST   /api/auth/refresh-token
 GET    /api/jobs
@@ -196,12 +196,27 @@ UserSchema.methods.toJSON = function() {
 }
 ```
 
-### Frontend Token Storage
+### Frontend Token Storage — Demo Mode
 ```javascript
-// Access token: memory only (Redux store / module variable)
-// NEVER: localStorage.setItem('token', ...)  ← FORBIDDEN
-// NEVER: sessionStorage                       ← FORBIDDEN
-// Refresh token: httpOnly cookie only (set by server)
+// DEMO DECISION: Both tokens returned in response body, stored in memory.
+// Access token:  memory (Redux store)
+// Refresh token: memory (Redux store) — returned alongside accessToken in response
+
+// Response shape for login:
+{
+  success: true,
+  data: {
+    accessToken: "eyJ...",
+    refreshToken: "eyJ...",
+    user: { _id, email, fullName, role }
+  }
+}
+
+// NEVER: localStorage or sessionStorage for either token
+// PRODUCTION UPGRADE: move refreshToken to httpOnly cookie
+//   → remove refreshToken from response body
+//   → res.cookie('refreshToken', token, { httpOnly: true, ... })
+//   → read from req.cookies.refreshToken on refresh endpoint
 ```
 
 ### CV File Access
@@ -555,59 +570,609 @@ async function changeStage(applicationId, newStage, hrId) {
 
 ---
 
-*End of rules.md — Cursor must read and apply ALL rules before generating any code.*
+## 15. LESSONS LEARNED — DO NOT REPEAT
+
+Cursor must check these before implementing any auth-related code.
+
+### LESSON 01 — Single login endpoint, role detected from DB
+```javascript
+// WRONG — never split by role
+POST /api/auth/login/hr
+POST /api/auth/login/candidate
+// CORRECT — one endpoint, role read from DB
+POST /api/auth/login
+```
+
+### LESSON 02 — JWT secret must MATCH between sign and verify
+```javascript
+// generatePasswordResetToken signs with candJwtSecret
+// resetPassword MUST verify with candJwtSecret — same secret
+jwt.verify(token, env.candJwtSecret)  // ✅
+jwt.verify(token, env.hrJwtSecret)    // ❌ always "Invalid token"
+// Secret map:
+// HR/Admin access token     → HR_JWT_SECRET
+// Candidate access token    → CAND_JWT_SECRET
+// Email verify token        → CAND_JWT_SECRET + purpose:'email-verify'
+// Password reset token      → CAND_JWT_SECRET + purpose:'password-reset'
+```
+
+### LESSON 03 — Never type JWT tokens manually in Postman
+```javascript
+// Tests tab on /login:
+pm.collectionVariables.set("accessToken", pm.response.json().data.accessToken)
+pm.collectionVariables.set("refreshToken", pm.response.json().data.refreshToken)
+// Tests tab on /forgot-password:
+pm.collectionVariables.set("resetToken", pm.response.json().data.resetToken)
+// Use: { "token": "{{resetToken}}" }
+```
+
+### LESSON 04 — findByIdWithSensitiveFields must include +passwordHash
+```javascript
+.select('+passwordHash +refreshToken +passwordResetToken +emailVerifyToken')
+// Never use in controllers — service layer only
+```
+
+### LESSON 05 — changePassword does NOT need jwt.verify
+```javascript
+// User already authenticated via middleware — use req.user.id directly
+const user = await userRepository.findByIdWithSensitiveFields(userId)
+const match = await comparePassword(currentPassword, user.passwordHash)
+```
+
+### LESSON 06 — Disable mustChangePassword check when /change-password route inactive
+```javascript
+// Only enable when route is active — HR gets locked out otherwise
+```
+
+### LESSON 07 — Double DB call is a code smell
+```javascript
+// WRONG
+const user = await userRepository.findAuthUserByEmail(
+  (await userRepository.findById(userId)).email
+)
+// CORRECT — 1 query
+const user = await userRepository.findByIdWithSensitiveFields(userId)
+```
+
+### LESSON 08 — Disabled vs Broken: always choose disabled
+```
+Disabled (intentional + documented) = OK
+Broken (returns error silently)     = NOT OK → disable + document + fix later
+```
+
+### LESSON 09 — No cookie: both tokens in response body
+```javascript
+// DEMO: both tokens returned in body
+res.json({ success:true, data: { accessToken, refreshToken, user } })
+// refresh-token endpoint reads from req.body.refreshToken (not cookie)
+// PRODUCTION: swap to httpOnly cookie — zero logic changes
+```
+
+### LESSON 10 — Joi fields must be .required() to prevent undefined body crash
+```javascript
+// WRONG — Joi strips field silently, controller crashes on destructure
+currentPassword: Joi.string().min(6)
+// CORRECT
+currentPassword: Joi.string().min(6).required()
+// Always send Content-Type: application/json with JSON body requests
+```
 
 ---
 
-## 14. DEMO vs PRODUCTION STRATEGY
+## 16. DEMO ACTIVE FEATURES — Sprint 1 Complete
 
-This project is built in DEMO MODE. Some features use simplified implementations
-that are explicitly designed for easy production upgrade later.
+### Auth — /api/auth/*
+```
+✅ POST /api/auth/register          — emailVerified: true immediately
+✅ POST /api/auth/login             — single endpoint, ALL roles (admin/hr/candidate)
+✅ POST /api/auth/logout            — revokes refresh token, 204
+✅ POST /api/auth/refresh-token     — body: { refreshToken } → { accessToken, refreshToken }
+✅ POST /api/auth/verify-email      — scaffolded, not enforced
+✅ POST /api/auth/forgot-password   — returns resetToken in body (demo mode)
+✅ POST /api/auth/reset-password    — body: { token, newPassword }
+✅ POST /api/auth/change-password   — authenticate + body: { currentPassword, newPassword }
+```
 
-### Email Verification — Demo Mode (CURRENT)
+### Admin — /api/admin/* (authenticate + authorize('admin') required)
+```
+✅ POST   /api/admin/hr                       — create HR, returns { user, tempPassword }
+✅ GET    /api/admin/hr                       — list all HR accounts
+✅ PATCH  /api/admin/hr/:id                   — update fullName/department/isActive
+✅ DELETE /api/admin/hr/:id                   — soft delete (isActive: false)
+✅ POST   /api/admin/hr/:id/force-reset-password — returns { user, tempPassword }
+```
+
+### mustChangePassword guard
+```
+HR with mustChangePassword: true → blocked on ALL routes
+Exception: POST /api/auth/change-password always allowed (escape hatch)
+Token claim: mustChangePassword included in HR access token payload
+```
+
+---
+
+## 17. UI LANGUAGE — VIETNAMESE REQUIRED
+
+**All user-facing text MUST be in Vietnamese.** This rule applies to every
+React component, page, button, label, placeholder, error message, toast,
+modal, and any text visible to the user.
+
+```
+✅ CORRECT
+<button>Đăng ký</button>
+<p>Không tìm thấy việc làm phù hợp</p>
+<label>Họ và tên</label>
+placeholder="Nhập email của bạn"
+toast.error("Tài khoản không tồn tại")
+
+❌ WRONG
+<button>Register</button>
+<p>No jobs found</p>
+<label>Full Name</label>
+placeholder="Enter your email"
+toast.error("Account not found")
+```
+
+### Vietnamese text reference — common UI strings
+
+```
+Authentication:
+  Đăng nhập          Login
+  Đăng ký            Register
+  Đăng xuất          Logout
+  Quên mật khẩu      Forgot password
+  Đổi mật khẩu       Change password
+  Mật khẩu           Password
+  Xác nhận           Confirm
+  Email              Email (same)
+  Họ và tên          Full name
+
+Jobs / Career:
+  Việc làm           Jobs
+  Tìm kiếm           Search
+  Lọc theo           Filter by
+  Bộ phận            Department
+  Kỹ năng yêu cầu    Required skills
+  Mô tả công việc    Job description
+  Ứng tuyển ngay     Apply now
+  Quay lại           Back
+  Xem chi tiết       View details
+  Ngày đăng          Posted date
+  Hết hạn            Expired / Expiry
+
+Application:
+  Nộp hồ sơ          Submit application
+  Tải lên CV         Upload CV
+  Thông tin cá nhân  Personal information
+  Nguồn biết đến     How did you hear about us
+  Lời nhắn           Message
+  Bước               Step (e.g. Bước 1/4)
+
+Status / Pipeline:
+  Mới                New
+  Đang xét duyệt     Screening
+  Phỏng vấn          Interview
+  Đề xuất            Offer
+  Đã tuyển           Hired
+  Không phù hợp      Rejected
+
+Common UI:
+  Lưu                Save
+  Hủy                Cancel
+  Xóa                Delete
+  Chỉnh sửa          Edit
+  Thêm mới           Add new
+  Xác nhận xóa       Confirm delete
+  Thành công         Success
+  Thất bại           Failed
+  Đang tải...        Loading...
+  Không có dữ liệu   No data
+  Thử lại            Retry
+  Đóng               Close
+```
+
+### LESSON 11 — English UI text = bug, must fix before demo
+
+```
+If any user-facing string is in English → treat it as a bug.
+Exception: technical field names used internally (e.g. "ID", "email" format)
+           and proper nouns (e.g. "LinkedIn", "Facebook")
+```
+
+### LESSON 12 — Stub pattern for unimplemented dependencies
+
+When a feature depends on a future task (e.g. BullMQ not yet setup),
+use stub with clear TODO comment — never leave silent failures.
 
 ```javascript
-// DEMO: No real email sent.
-// registerCandidate() returns emailVerifyToken directly in API response.
-// Frontend calls /api/auth/verify-email with token automatically after register.
+// CORRECT stub pattern
+async function submitApplication(...) {
+  // ... save CV, create application ...
 
-// Response shape for demo:
-{
-  success: true,
-  data: {
-    user: { _id, email, fullName, role, emailVerified: false },
-    emailVerifyToken: "eyJhbGci..."  // exposed for demo only
-  }
+  // TODO: Task 15 — replace with real BullMQ enqueue
+  console.log('[AI Queue] Queued for applicationId:', application._id)
+  // aiStatus stays 'pending' until worker picks it up
+
+  // TODO: Task 23 — replace with real email queue
+  await emailService.sendApplyConfirm({ to, jobTitle })
+  // emailService uses console.log in demo mode
+}
+
+// WRONG — silent skip with no indication
+async function submitApplication(...) {
+  // ... save CV, create application ...
+  // (AI queue just... not called, no comment)
 }
 ```
 
+Stub rules:
+- Always log with prefix: [AI Queue], [Email Queue], [Socket], etc.
+- Always add: // TODO: Task XX — replace with real implementation
+- aiStatus must still be set correctly (pending/manual_review/skipped)
+  so the UI shows correct state even before worker exists
+
+### LESSON 13 — Application duplicate: catch code 11000, not AppError
+
 ```javascript
-// PRODUCTION UPGRADE PATH (future — zero backend changes):
-// 1. Remove emailVerifyToken from register response
-// 2. Add: await emailService.sendVerifyEmail(user.email, token)
-// 3. verifyEmail() logic stays 100% identical
+// CORRECT — MongoDB duplicate key error has code 11000
+async create(data) {
+  try {
+    return await Application.create(data)
+  } catch (error) {
+    if (error.code === 11000) {
+      throw new AppError('Bạn đã ứng tuyển vị trí này rồi', 409)
+    }
+    throw error
+  }
+}
+
+// WRONG — checking error message string (fragile, locale-dependent)
+if (error.message.includes('duplicate')) { ... }
 ```
 
-### Email Verify Token — Use JWT (not crypto.randomBytes)
+### LESSON 14 — formData nested schema, not flat fields on Application
 
 ```javascript
-// Payload: { sub: userId, purpose: 'email-verify' }
-// Secret:  CAND_JWT_SECRET
-// Expiry:  24h
-// Store:   raw token saved to user.emailVerifyToken in DB
-// Verify:  jwt.verify() + check purpose === 'email-verify' + check DB field matches token
-// Cleanup: set emailVerifyToken = null after successful verify (prevent reuse)
+// Application.model.js — formData is embedded object
+formData: {
+  country:     { type: String },
+  city:        { type: String },
+  gender:      { type: String, enum: ['Nam', 'Nữ', 'Khác'] },
+  source:      { type: String, enum: ['LinkedIn','Facebook','Referral',
+                                       'Website','Khác'] },
+  messageToHR: { type: String, maxlength: 500 }
+}
+// NOT flat fields: country, city, gender directly on Application schema
 ```
 
-### What MUST NOT be simplified even in demo
+### LESSON 15 — Route double-prefix bug: never prefix twice
+
+```javascript
+// WRONG — results in /api/api/applications/...
+// In routes/index.js:
+router.use('/api/applications', applicationRoutes)
+// In app.js:
+app.use('/api', routes)
+// Final path: /api + /api/applications = /api/api/applications ❌
+
+// CORRECT — prefix only once
+// In routes/index.js:
+router.use('/applications', applicationRoutes)
+// In app.js:
+app.use('/api', routes)
+// Final path: /api + /applications = /api/applications ✅
+```
+
+Always verify final mounted path = app.use prefix + router.use prefix + route path.
+When adding a new router: trace the full path before testing.
+
+### LESSON 16 — Gemini model string: use exact API model name
+
+```javascript
+// CORRECT — exact API string
+const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
+// WRONG — marketing name, not valid API string
+const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+// → 404 model not found from Gemini API
+
+// Current model used in this project: gemini-2.0-flash
+// If upgrading: verify exact string at aistudio.google.com/models
+```
+
+### LESSON 17 — BullBoard must be side-effect imported to register queues
+
+```javascript
+// In app.js — import worker for side effect (registers the queue processor)
+import './src/queues/workers/ai.worker.js'
+
+// Without this import: queue jobs are added but never processed
+// Worker only runs if the module is imported somewhere in the app
+```
+
+### LESSON 18 — Gemini response may contain markdown fences — always strip
+
+```javascript
+// Gemini sometimes wraps JSON in ```json ... ``` even when told not to
+// Always strip before JSON.parse:
+const cleaned = text
+  .replace(/```json/gi, '')
+  .replace(/```/g, '')
+  .trim()
+const parsed = JSON.parse(cleaned)
+
+// Never do: const parsed = JSON.parse(text) — will throw SyntaxError
+```
+
+---
+
+## 18. DEMO ACTIVE FEATURES — Sprint 2 + Sprint 3 (partial)
+
+### Job — /api/jobs/*
+```
+✅ GET  /api/jobs              — public, open jobs only
+✅ GET  /api/jobs/all          — HR/Admin, all jobs with filters
+✅ GET  /api/jobs/:id          — public, job detail
+✅ POST /api/jobs              — HR/Admin, create job
+✅ PATCH /api/jobs/:id         — HR/Admin, update job
+✅ PATCH /api/jobs/:id/publish — HR/Admin, set status: open
+✅ PATCH /api/jobs/:id/close   — HR/Admin, set status: closed
+✅ DELETE /api/jobs/:id        — Admin only, soft delete
+```
+
+### Application — /api/applications/*
+```
+✅ POST /api/applications      — Candidate only, submit CV + form
+   → saves CV to disk, extracts text, creates Application
+   → aiStatus: 'pending' (stub queue until Task 15)
+   → email confirm: console.log (stub until Task 23)
+   → duplicate → 409 "Bạn đã ứng tuyển vị trí này rồi"
+   → invalid file → 400 "Loại file không hợp lệ"
+   → file too large → 400 "File quá lớn (tối đa 5MB)"
+   → CV text < 100 chars → aiStatus: 'manual_review'
+```
+
+### Frontend routes (tiếng Việt UI)
+```
+✅ /          → JobListPage  (Danh sách việc làm)
+✅ /jobs      → JobListPage
+✅ /jobs/:id  → JobDetailPage (Chi tiết việc làm)
+✅ /apply/:jobId → ApplyPage (Nộp hồ sơ — 4 bước)
+```
+
+### Application stage enum
+```
+'Mới' | 'Đang xét duyệt' | 'Phỏng vấn' | 'Đề xuất' | 'Đã tuyển' | 'Không phù hợp'
+```
+
+### Application aiStatus enum
+```
+'pending' | 'processing' | 'done' | 'ai_failed' | 'manual_review' | 'skipped'
+```
+
+### AI + File — Sprint 3 COMPLETE (Task 14–18)
+```
+✅ GET  /api/applications/:appId/cv-url  — HR any / Candidate own → signed URL (15min)
+✅ GET  /api/files/serve?path&sig&exp    — verify signature → stream file
+✅ BullMQ ai_screening queue             — addAIJob(applicationId)
+✅ AI Worker (gemini-2.0-flash)          — 10 req/min, retry x3 exponential
+✅ AIEvaluation collection               — matchingScore, skills, summary (tiếng Việt)
+✅ /admin/queues                         — BullBoard (admin only)
+✅ PATCH /api/applications/:appId/stage  — stageChange.service.js ONLY
+✅ PATCH /api/applications/:appId/note   — HR note auto-save
+✅ GET   /api/applications?jobId=        — list for Kanban
+✅ models/InterviewSchedule.model.js     — created on stage → Phỏng vấn
+✅ Kanban board                          — 5 columns, DnD, AI score sort, Vietnamese
+✅ ScheduleModal                         — required before moving to Phỏng vấn
+✅ Split-view review                     — CV iframe + AIScoreCard + HR note
+
+aiStatus flow:
+  pending → processing → done          (happy path)
+  pending → processing → manual_review (cvText < 100 chars)
+  pending → processing → ai_failed     (all retries exhausted)
+
+Stage enum (Vietnamese):
+  Mới | Đang xét duyệt | Phỏng vấn | Đề xuất | Đã tuyển | Không phù hợp
+
+Stubs remaining (to be replaced in Sprint 4):
+  [Socket] application:stage_changed  → Task 20
+  [Socket] application:new            → Task 21
+  [Email Queue] stage trigger         → Task 23
+```
+
+### LESSON 19 — stageChange.service.js is the ONLY file that calls updateStage
+
+```javascript
+// CORRECT — all stage changes go through the service
+await stageChangeService.changeStage(appId, 'Phỏng vấn', hrId, scheduleData)
+
+// WRONG — bypassing the service
+await applicationRepo.updateStage(appId, 'Phỏng vấn') // ← direct call FORBIDDEN
+// Consequence: email, socket, discrepancy logic all silently skipped
+```
+
+If ANY file other than stageChange.service.js calls applicationRepo.updateStage()
+→ treat it as a critical bug and refactor immediately.
+
+### LESSON 20 — Kanban optimistic update: revert on API fail
+
+```javascript
+// In useKanban.js — always optimistic update first, revert on error
+const handleDragEnd = async (result) => {
+  // 1. Optimistically move card in local state
+  setColumns(prev => moveCard(prev, source, destination))
+
+  try {
+    await changeApplicationStage(appId, newStage, scheduleData)
+  } catch (error) {
+    // 2. Revert on failure
+    setColumns(prev => moveCard(prev, destination, source))
+    toast.error('Không thể cập nhật trạng thái. Vui lòng thử lại.')
+  }
+}
+
+// WRONG — wait for API before updating UI (laggy UX)
+await changeApplicationStage(appId, newStage)
+setColumns(prev => moveCard(prev, source, destination))
+```
+
+### LESSON 21 — ScheduleModal must block stage change, not just show UI
+
+```javascript
+// CORRECT flow for dropping to 'Phỏng vấn':
+// 1. onDragEnd detects destination = 'Phỏng vấn'
+// 2. DO NOT call API yet
+// 3. Open ScheduleModal
+// 4. If cancel → revert card (no API call)
+// 5. If confirm → call PATCH with scheduleData
+// 6. On API success → keep card in new column
+
+// WRONG — call API before modal confirms
+await changeStage(appId, 'Phỏng vấn') // ← called before schedule collected
+openScheduleModal()                    // ← too late, stage already changed
+```
+
+---
+
+## 19. TESTING RULES — Jest + ES Modules
+
+### Setup — critical config for ES modules with Jest
+
+```javascript
+// server/babel.config.cjs (NOT .js — must be CommonJS)
+module.exports = {
+  presets: [['@babel/preset-env', { targets: { node: 'current' } }]]
+}
+
+// server/package.json
+"jest": {
+  "testEnvironment": "node",
+  "transform": { "^.+\.js$": "babel-jest" },
+  "testMatch": ["**/__tests__/**/*.test.js"],
+  "setupFilesAfterFramework": ["<rootDir>/src/__tests__/setup.js"]
+}
+```
+
+### mongodb-memory-server — test DB setup
+
+```javascript
+// src/__tests__/setup.js
+import { MongoMemoryServer } from 'mongodb-memory-server'
+import mongoose from 'mongoose'
+
+let mongod
+
+beforeAll(async () => {
+  mongod = await MongoMemoryServer.create()
+  await mongoose.connect(mongod.getUri())
+})
+
+afterEach(async () => {
+  // Clear all collections between tests
+  const collections = mongoose.connection.collections
+  for (const key in collections) {
+    await collections[key].deleteMany({})
+  }
+})
+
+afterAll(async () => {
+  await mongoose.disconnect()
+  await mongod.stop()
+})
+```
+
+### Mocking rules
+
+```javascript
+// Mock external services — never call real APIs in tests
+jest.mock('../../services/ai.service.js')
+jest.mock('../../queues/ai.queue.js')
+jest.mock('../../services/email.service.js')
+
+// Mock fs for file service tests
+jest.mock('fs/promises')
+
+// Mock Gemini
+jest.mock('@google/generative-ai', () => ({
+  GoogleGenerativeAI: jest.fn().mockImplementation(() => ({
+    getGenerativeModel: jest.fn().mockReturnValue({
+      generateContent: jest.fn().mockResolvedValue({
+        response: { text: () => '{"matchingScore":85,"matchedSkills":["React"],"missingSkills":[],"summary":"Tốt"}' }
+      })
+    })
+  }))
+}))
+```
+
+### Test naming convention
+
+```javascript
+// describe → service/component name
+// it → 'should [expected behavior] when [condition]'
+describe('authService', () => {
+  it('should return 401 when password is wrong', async () => { ... })
+  it('should not include passwordHash in login response', async () => { ... })
+  it('should rotate refresh token on each use', async () => { ... })
+})
+```
+
+### What to assert in every auth test
+
+```javascript
+// Always check these in login/register tests:
+expect(result.user.passwordHash).toBeUndefined()
+expect(result.user.refreshToken).toBeUndefined()
+expect(result.user.emailVerifyToken).toBeUndefined()
+// PII never leaks through test = PII never leaks in production
+```
+
+### Vietnamese text assertions in React tests
+
+```javascript
+// Use getByText for Vietnamese strings
+expect(screen.getByText('Tải lên CV')).toBeInTheDocument()
+expect(screen.getByText('Bạn đã ứng tuyển vị trí này rồi')).toBeInTheDocument()
+// getByRole with name
+expect(screen.getByRole('button', { name: 'Ứng tuyển ngay' })).toBeInTheDocument()
+```
+
+### LESSON 22 — babel.config must be .cjs not .js for Jest + ES modules
 
 ```
-- JWT secrets      → always separate, always expire correctly
-- Password hashing → always bcrypt rounds 12
-- Refresh token    → always rotate on every use
-- Role guards      → never skip authorize() middleware
-- CV file access   → always require auth + ownership check
-- Socket auth      → always verify JWT on handshake
+// WRONG — Jest cannot parse ES module babel config
+babel.config.js with: export default { ... }
+
+// CORRECT — CommonJS format for babel config
+babel.config.cjs with: module.exports = { ... }
+```
+
+### LESSON 23 — Never call real external APIs in unit tests
+
+```javascript
+// WRONG — slow, flaky, costs money, fails offline
+it('should screen CV', async () => {
+  const result = await aiService.screenCV(cvText, ...)
+  // This calls real Gemini API ← NEVER
+})
+
+// CORRECT — mock the API client
+jest.mock('@google/generative-ai')
+// Test only your parsing + validation logic
+```
+
+### LESSON 24 — Clear DB between tests, not between suites
+
+```javascript
+// WRONG — stale data leaks between tests in same suite
+afterAll(async () => { await clearDB() })
+
+// CORRECT — clear after EACH test
+afterEach(async () => {
+  const collections = mongoose.connection.collections
+  for (const key in collections) {
+    await collections[key].deleteMany({})
+  }
+})
 ```
 
 ---

@@ -8,6 +8,11 @@ import { connectDB } from './src/config/db.js'
 import { getRedisClient } from './src/config/redis.js'
 import routes from './src/routes/index.js'
 import { errorHandler } from './src/middlewares/errorHandler.js'
+import { bullBoardRouter } from './src/queues/ai.queue.js'
+import { authenticate } from './src/middlewares/authenticate.js'
+import { allowRoles } from './src/middlewares/authorize.js'
+// Start the AI worker process
+import './src/queues/workers/ai.worker.js'
 
 const app = express()
 
@@ -24,6 +29,16 @@ app.use(
     max: 100
   })
 )
+// Workaround for Express 5 req.query getter so express-mongo-sanitize can safely assign
+app.use((req, res, next) => {
+  Object.defineProperty(req, 'query', {
+    value: { ...req.query },
+    writable: true,
+    configurable: true,
+    enumerable: true
+  })
+  next()
+})
 app.use(mongoSanitize())
 app.use(
   express.json({
@@ -32,6 +47,7 @@ app.use(
 )
 
 app.use('/api', routes)
+app.use('/admin/queues', authenticate, allowRoles('admin'), bullBoardRouter)
 
 app.use(errorHandler)
 
@@ -46,7 +62,9 @@ async function startServer() {
   })
 }
 
-void startServer()
+if (process.env.NODE_ENV !== 'test') {
+  void startServer()
+}
 
 export default app
 
