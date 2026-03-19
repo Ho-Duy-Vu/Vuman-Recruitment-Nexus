@@ -70,6 +70,10 @@ const createTestJob = async (status = 'open') => {
     title: 'Test Engineer',
     description: 'Test job description',
     department: 'Engineering',
+    location: 'Hà Nội',
+    workMode: 'onsite',
+    employmentType: 'full_time',
+    jobCode: `TEST-${Math.random().toString(16).slice(2, 8).toUpperCase()}`,
     requiredSkills: ['JavaScript'],
     status,
     createdBy: '507f1f77bcf86cd799439011'

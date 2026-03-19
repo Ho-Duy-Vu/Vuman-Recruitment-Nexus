@@ -7,7 +7,7 @@ export const loginSchema = Joi.object({
 
 export const registerSchema = Joi.object({
   email: Joi.string().email().required(),
-  password: Joi.string().min(8).max(72).required(),
+  password: Joi.string().min(6).max(72).required(),
   fullName: Joi.string().min(2).max(50).required()
 }).required()
 
@@ -25,11 +25,11 @@ export const forgotPasswordSchema = Joi.object({
 
 export const resetPasswordSchema = Joi.object({
   token: Joi.string().required(),
-  newPassword: Joi.string().min(8).max(72).required()
+  newPassword: Joi.string().min(6).max(72).required()
 }).required()
 
 export const changePasswordSchema = Joi.object({
   currentPassword: Joi.string().required(),
-  newPassword: Joi.string().min(8).max(72).required()
+  newPassword: Joi.string().min(6).max(72).required()
 }).required()
 

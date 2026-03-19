@@ -26,7 +26,9 @@ app.use(
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 100
+    max: env.nodeEnv === 'development' ? 2000 : 200,
+    standardHeaders: true,
+    legacyHeaders: false
   })
 )
 // Workaround for Express 5 req.query getter so express-mongo-sanitize can safely assign

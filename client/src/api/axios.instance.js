@@ -3,7 +3,8 @@ import { store } from '../store/store'
 import { logout, setCredentials } from '../store/authSlice'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL
+  // Dev default: use Vite proxy to backend via /api
+  baseURL: import.meta.env.VITE_API_URL || '/api'
 })
 
 api.interceptors.request.use(
@@ -38,6 +39,14 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
+
+    const url = originalRequest?.url || ''
+    const isAuthRefreshCall = typeof url === 'string' && url.includes('/auth/refresh-token')
+
+    // If refresh itself fails with 401, don't loop forever.
+    if (isAuthRefreshCall) {
+      return Promise.reject(error)
+    }
 
     if (error.response?.status !== 401 || originalRequest._retry) {
       return Promise.reject(error)

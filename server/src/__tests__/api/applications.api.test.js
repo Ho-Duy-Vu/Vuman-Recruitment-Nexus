@@ -63,6 +63,10 @@ beforeAll(async () => {
     title: 'Backend Dev',
     description: 'Build APIs',
     department: 'Engineering',
+    location: 'Hà Nội',
+    workMode: 'onsite',
+    employmentType: 'full_time',
+    jobCode: 'APPTEST-001',
     requiredSkills: ['Node.js'],
     status: 'open',
     createdBy: hr._id

@@ -97,6 +97,9 @@ const createJob = async (token = hrToken) => {
       title: 'Test Engineer',
       description: 'Build great things',
       department: 'Engineering',
+      location: 'Hà Nội',
+      workMode: 'onsite',
+      employmentType: 'full_time',
       requiredSkills: ['JavaScript', 'Node.js']
     })
 }
@@ -142,7 +145,15 @@ describe('POST /api/jobs', () => {
     const res = await request(app)
       .post('/api/jobs')
       .set('Content-Type', 'application/json')
-      .send({ title: 'Test', description: 'Desc', department: 'Eng', requiredSkills: ['JS'] })
+      .send({
+        title: 'Test',
+        description: 'Desc',
+        department: 'Eng',
+        location: 'Hà Nội',
+        workMode: 'onsite',
+        employmentType: 'full_time',
+        requiredSkills: ['JS']
+      })
     expect(res.status).toBe(401)
   })
 })

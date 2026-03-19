@@ -6,73 +6,131 @@ export const KanbanPage = () => {
   const [jobs, setJobs] = useState([])
   const [selectedJobId, setSelectedJobId] = useState('')
   const [loadingJobs, setLoadingJobs] = useState(false)
+  const [error, setError] = useState(null)
+  const [updatingJob, setUpdatingJob] = useState(false)
 
-  useEffect(() => {
+  const loadJobs = () => {
     setLoadingJobs(true)
+    setError(null)
     api
       .get('/jobs/all')
       .then((r) => {
-        const list = r.data?.data?.jobs || []
+        const list = r.data?.data?.items || []
         setJobs(list)
-        if (list.length > 0) setSelectedJobId(list[0]._id)
+        if (list.length > 0) setSelectedJobId((prev) => prev || list[0]._id)
       })
-      .catch(() => {})
+      .catch(() => setError('Không thể tải danh sách công việc.'))
       .finally(() => setLoadingJobs(false))
-  }, [])
+  }
+
+  useEffect(() => { loadJobs() }, [])
 
   const selectedJob = jobs.find((j) => j._id === selectedJobId)
 
+  const updateStatus = async (action) => {
+    if (!selectedJobId) return
+    setUpdatingJob(true)
+    setError(null)
+    try {
+      await api.patch(`/jobs/${selectedJobId}/${action}`)
+      await loadJobs()
+    } catch (e) {
+      setError(e.response?.data?.message || 'Không thể cập nhật trạng thái.')
+    } finally {
+      setUpdatingJob(false)
+    }
+  }
+
   return (
-    <div style={{ padding: '24px 32px', minHeight: '100vh', background: '#f1f5f9' }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1e293b' }}>
-            Bảng Kanban Tuyển Dụng
-          </h1>
-          <div style={{ flex: 1 }} />
-          {loadingJobs ? (
-            <span style={{ color: '#64748b', fontSize: 14 }}>Đang tải...</span>
-          ) : (
+    <div className="hr-page-layout">
+      <div className="hr-page-inner">
+        {/* Header */}
+        <div className="hr-page-header">
+          <h1 className="hr-page-title">Bảng Kanban Tuyển Dụng</h1>
+
+          {selectedJob && (
+            selectedJob.status === 'open' ? (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => void updateStatus('close')}
+                disabled={updatingJob || loadingJobs}
+              >
+                {updatingJob ? 'Đang cập nhật...' : 'Đóng tuyển'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void updateStatus('publish')}
+                disabled={updatingJob || loadingJobs}
+              >
+                {updatingJob ? 'Đang cập nhật...' : 'Mở tuyển'}
+              </button>
+            )
+          )}
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={loadJobs}
+            disabled={loadingJobs}
+          >
+            {loadingJobs ? 'Đang tải...' : 'Làm mới'}
+          </button>
+
+          {!loadingJobs && (
             <select
               value={selectedJobId}
               onChange={(e) => setSelectedJobId(e.target.value)}
               style={{
-                padding: '8px 14px',
-                border: '1px solid #d1d5db',
-                borderRadius: 8,
+                height: 36,
+                padding: '0 14px',
+                border: '1px solid var(--border-input)',
+                borderRadius: 4,
                 fontSize: 14,
-                background: '#fff',
-                minWidth: 240,
+                background: 'var(--bg-white)',
+                color: 'var(--text-primary)',
+                minWidth: 260,
                 cursor: 'pointer'
               }}
             >
               {jobs.length === 0 && <option value="">-- Không có công việc nào --</option>}
               {jobs.map((j) => (
                 <option key={j._id} value={j._id}>
-                  {j.title} {j.status === 'closed' ? '(Đã đóng)' : ''}
+                  {j.title}{j.status === 'closed' ? ' (Đã đóng)' : j.status === 'draft' ? ' (Nháp)' : ''}
                 </option>
               ))}
             </select>
           )}
         </div>
 
-        {selectedJob && (
-          <div style={{ marginBottom: 16, padding: '10px 16px', background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-            <span style={{ fontSize: 13, color: '#64748b' }}>
-              Phòng ban: <strong>{selectedJob.department}</strong>
-              {' · '}
-              Trạng thái:{' '}
-              <strong style={{ color: selectedJob.status === 'open' ? '#22c55e' : '#94a3b8' }}>
-                {selectedJob.status === 'open' ? 'Đang tuyển' : 'Đã đóng'}
-              </strong>
-            </span>
+        {/* Error banner */}
+        {error && (
+          <div className="hr-card" style={{ color: '#cc0000', fontSize: 13, marginBottom: 12 }}>
+            {error}
           </div>
         )}
 
+        {/* Job meta badge */}
+        {selectedJob && (
+          <div className="hr-card" style={{ marginBottom: 12, fontSize: 13, color: 'var(--text-muted)' }}>
+            Phòng ban: <strong style={{ color: 'var(--text-primary)' }}>{selectedJob.department || '-'}</strong>
+            {' · '}
+            Địa điểm: <strong style={{ color: 'var(--text-primary)' }}>{selectedJob.location || '-'}</strong>
+            {' · '}
+            Trạng thái:{' '}
+            <strong style={{ color: selectedJob.status === 'open' ? 'var(--color-primary)' : 'var(--text-muted)' }}>
+              {selectedJob.status === 'open' ? 'Đang tuyển' : selectedJob.status === 'draft' ? 'Bản nháp' : 'Đã đóng'}
+            </strong>
+          </div>
+        )}
+
+        {/* Board */}
         {selectedJobId ? (
           <KanbanBoard jobId={selectedJobId} />
         ) : (
-          <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
+          <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)', fontSize: 14 }}>
             Chọn một công việc để xem bảng Kanban
           </div>
         )}

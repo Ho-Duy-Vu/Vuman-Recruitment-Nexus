@@ -19,10 +19,10 @@ const router = express.Router()
 
 // Public routes
 router.get('/jobs', getOpenJobsController)
-router.get('/jobs/:id', getJobByIdController)
 
 // Authenticated HR/Admin routes
 router.get('/jobs/all', authenticate, allowRoles('hr', 'admin'), getAllJobsController)
+router.get('/jobs/:id', getJobByIdController)
 router.post('/jobs', authenticate, allowRoles('hr', 'admin'), validate(createJobSchema), createJobController)
 router.patch(
   '/jobs/:id',

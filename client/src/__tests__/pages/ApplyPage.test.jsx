@@ -5,7 +5,6 @@ import { Provider } from 'react-redux'
 import { configureStore } from '@reduxjs/toolkit'
 import authReducer from '../../store/authSlice'
 
-// Mock the application API
 jest.mock('../../api/application.api', () => ({
   submitApplication: jest.fn()
 }))
@@ -30,102 +29,104 @@ const renderApplyPage = (jobId = 'job123') => {
   )
 }
 
+// helper: fill step 0 required fields
+// text inputs: [0]=Họ(optional), [1]=Tên(optional), [2]=city(required)
+// selects:     [0]=country, [1]=gender(required)
+const fillStep0 = () => {
+  const textInputs = document.querySelectorAll('input[type="text"]')
+  fireEvent.change(textInputs[2], { target: { value: 'Hà Nội' } })
+  const selects = document.querySelectorAll('select')
+  fireEvent.change(selects[1], { target: { value: 'Nam' } })
+}
+
 beforeEach(() => {
   jest.clearAllMocks()
 })
 
-describe('ApplyPage — Step 1', () => {
-  it('should show "Tải lên CV" heading on step 1', () => {
+describe('ApplyPage — Step 1 (Thông tin của tôi)', () => {
+  it('should show "Thông tin của tôi" heading on step 1', () => {
     renderApplyPage()
-    expect(screen.getByText('Tải lên CV')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Thông tin của tôi' })).toBeInTheDocument()
   })
 
-  it('should NOT proceed to step 2 without CV file', () => {
+  it('should NOT proceed without required personal info', () => {
     renderApplyPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
-    expect(screen.getByText(/Vui lòng tải lên file CV/)).toBeInTheDocument()
-    expect(screen.getByText('Tải lên CV')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và tiếp tục' }))
+    expect(screen.getByText(/Vui lòng điền đầy đủ thông tin bắt buộc/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Thông tin của tôi' })).toBeInTheDocument()
   })
 
-  it('should proceed to step 2 after selecting a CV file', () => {
+  it('should proceed to step 2 after filling required info', () => {
     renderApplyPage()
-    const file = new File(['content'], 'resume.pdf', { type: 'application/pdf' })
-    fireEvent.change(document.querySelector('input[type="file"]'), { target: { files: [file] } })
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
-    expect(screen.getByText('Thông tin cá nhân')).toBeInTheDocument()
+    fillStep0()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và tiếp tục' }))
+    expect(screen.getByRole('heading', { name: 'Kinh nghiệm' })).toBeInTheDocument()
   })
 })
 
-describe('ApplyPage — Step 2', () => {
+describe('ApplyPage — Step 2 (Kinh nghiệm)', () => {
   const goToStep2 = () => {
     renderApplyPage()
-    const file = new File(['content'], 'resume.pdf', { type: 'application/pdf' })
-    fireEvent.change(document.querySelector('input[type="file"]'), { target: { files: [file] } })
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    fillStep0()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và tiếp tục' }))
   }
 
-  it('should show Vietnamese field labels on step 2', () => {
+  it('should show "Kinh nghiệm" heading on step 2', () => {
     goToStep2()
-    expect(screen.getByText(/Quốc gia/)).toBeInTheDocument()
-    expect(screen.getByText(/Thành phố/)).toBeInTheDocument()
-    expect(screen.getByText(/Giới tính/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Kinh nghiệm' })).toBeInTheDocument()
   })
 })
 
-describe('ApplyPage — Step 3', () => {
+describe('ApplyPage — Step 3 (Câu hỏi ứng tuyển / CV)', () => {
   const goToStep3 = () => {
     renderApplyPage()
-    const file = new File(['content'], 'resume.pdf', { type: 'application/pdf' })
-    fireEvent.change(document.querySelector('input[type="file"]'), { target: { files: [file] } })
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
-    // Fill step 2
-    const inputs = document.querySelectorAll('input[type="text"]')
-    fireEvent.change(inputs[0], { target: { value: 'Vietnam' } })
-    fireEvent.change(inputs[1], { target: { value: 'Hanoi' } })
-    fireEvent.change(inputs[2], { target: { value: 'Male' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    fillStep0()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và tiếp tục' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và tiếp tục' }))
   }
 
-  it('should show "Nguồn biết đến" with Vietnamese source options', () => {
+  it('should show CV upload label on step 3', () => {
     goToStep3()
-    expect(screen.getByText('Nguồn biết đến')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('LinkedIn')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Câu hỏi ứng tuyển' })).toBeInTheDocument()
+    expect(screen.getByText(/Tải lên CV/)).toBeInTheDocument()
+  })
+
+  it('should NOT proceed to step 4 without CV file', () => {
+    goToStep3()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và tiếp tục' }))
+    expect(screen.getByText(/Vui lòng tải lên file CV/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Câu hỏi ứng tuyển' })).toBeInTheDocument()
   })
 })
 
-describe('ApplyPage — Step 4', () => {
+describe('ApplyPage — Step 4 (Thông tin tự nguyện)', () => {
   const goToStep4 = () => {
     renderApplyPage()
+    fillStep0()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và tiếp tục' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và tiếp tục' }))
     const file = new File(['content'], 'resume.pdf', { type: 'application/pdf' })
     fireEvent.change(document.querySelector('input[type="file"]'), { target: { files: [file] } })
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
-    const inputs = document.querySelectorAll('input[type="text"]')
-    fireEvent.change(inputs[0], { target: { value: 'Vietnam' } })
-    fireEvent.change(inputs[1], { target: { value: 'Hanoi' } })
-    fireEvent.change(inputs[2], { target: { value: 'Male' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và tiếp tục' }))
   }
 
   it('should show "Lời nhắn gửi HR" textarea with char counter', () => {
     goToStep4()
     expect(screen.getByText(/Lời nhắn gửi HR/)).toBeInTheDocument()
-    expect(screen.getByText(/0\/500 ký tự/)).toBeInTheDocument()
+    expect(screen.getByText('0/500')).toBeInTheDocument()
   })
 })
 
 describe('ApplyPage — API errors', () => {
   const fillAndSubmit = async () => {
     renderApplyPage()
+    fillStep0()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và tiếp tục' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và tiếp tục' }))
     const file = new File(['content'], 'resume.pdf', { type: 'application/pdf' })
     fireEvent.change(document.querySelector('input[type="file"]'), { target: { files: [file] } })
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
-    const inputs = document.querySelectorAll('input[type="text"]')
-    fireEvent.change(inputs[0], { target: { value: 'Vietnam' } })
-    fireEvent.change(inputs[1], { target: { value: 'Hanoi' } })
-    fireEvent.change(inputs[2], { target: { value: 'Male' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và tiếp tục' })) // step 3
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và tiếp tục' })) // step 4 review
     fireEvent.click(screen.getByRole('button', { name: 'Nộp hồ sơ' }))
   }
 
@@ -133,9 +134,10 @@ describe('ApplyPage — API errors', () => {
     submitApplication.mockRejectedValueOnce({
       response: { status: 409, data: { message: 'Application already exists' } }
     })
-
     await fillAndSubmit()
-
+    await waitFor(() => {
+      expect(submitApplication).toHaveBeenCalledTimes(1)
+    })
     await waitFor(() => {
       expect(screen.getByText('Bạn đã ứng tuyển vị trí này rồi')).toBeInTheDocument()
     })

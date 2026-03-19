@@ -1,5 +1,6 @@
 import { Application } from '../models/Application.model.js'
 import { AppError } from '../utils/AppError.js'
+import { aiEvaluationRepository } from './aiEvaluation.repository.js'
 
 class ApplicationRepository {
   async create(data) {
@@ -18,11 +19,35 @@ class ApplicationRepository {
     const apps = await Application.find({ jobId })
       .populate('candidateId', 'fullName email')
       .lean()
-    return apps
+
+    // Kanban UI sorts/renders based on aiEvaluation.matchingScore
+    const appIds = apps.map((a) => a._id)
+    const evaluations = await aiEvaluationRepository.findManyByApplications(appIds)
+    const evalMap = new Map(
+      evaluations.map((e) => [String(e.applicationId), e])
+    )
+
+    return apps.map((app) => ({
+      ...app,
+      aiEvaluation: evalMap.get(String(app._id)) || null
+    }))
   }
 
   async findById(id) {
     const app = await Application.findById(id).lean()
+    if (!app) {
+      throw new AppError('Application not found', 404)
+    }
+    return app
+  }
+
+  async findByIdForReview(id) {
+    // HR review page needs candidate/job fields for UI.
+    const app = await Application.findById(id)
+      .populate('candidateId', 'fullName email')
+      .populate('jobId', 'title department location employmentType jobCode createdAt')
+      .lean()
+
     if (!app) {
       throw new AppError('Application not found', 404)
     }
@@ -58,7 +83,9 @@ class ApplicationRepository {
   }
 
   async findByCandidate(candidateId) {
-    const apps = await Application.find({ candidateId }).lean()
+    const apps = await Application.find({ candidateId })
+      .populate('jobId', 'title department location employmentType jobCode createdAt')
+      .lean()
     return apps
   }
 

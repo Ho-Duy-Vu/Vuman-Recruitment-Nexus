@@ -15,6 +15,10 @@ export const submitApplication = (jobId, { country, city, gender, source, messag
   return api.post('/applications', formData).then((r) => r.data.data)
 }
 
+export const fetchMyApplications = () => {
+  return api.get('/applications/my').then((r) => r.data.data.applications)
+}
+
 export const changeApplicationStage = (appId, newStage, scheduleData) =>
   api
     .patch(`/applications/${appId}/stage`, { newStage, ...(scheduleData ? { scheduleData } : {}) })

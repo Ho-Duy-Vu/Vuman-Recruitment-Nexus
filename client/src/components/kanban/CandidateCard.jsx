@@ -2,7 +2,7 @@ import { Draggable } from '@hello-pangea/dnd'
 import { useNavigate } from 'react-router-dom'
 
 const AI_STATUS_LABELS = {
-  pending: 'Đang xử lý',
+  pending: 'Chờ AI',
   processing: 'Đang xử lý',
   done: 'Hoàn thành',
   manual_review: 'Cần xem xét',
@@ -41,32 +41,31 @@ export const CandidateCard = ({ application, index }) => {
           {...provided.dragHandleProps}
           onClick={() => navigate(`/hr/applications/${application._id}/review`)}
           style={{
-            background: snapshot.isDragging ? '#f0f9ff' : '#ffffff',
-            border: '1px solid #e2e8f0',
-            borderRadius: 8,
+            background: snapshot.isDragging ? '#f0f9ff' : 'var(--bg-white)',
+            border: '1px solid var(--border-card)',
+            borderRadius: 'var(--radius-md)',
             padding: '10px 12px',
             marginBottom: 8,
             cursor: 'pointer',
-            boxShadow: snapshot.isDragging ? '0 4px 12px rgba(0,0,0,0.15)' : '0 1px 3px rgba(0,0,0,0.06)',
-            transition: 'box-shadow 0.2s',
+            transition: 'background 0.15s',
             ...provided.draggableProps.style
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-            <span style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>{candidateName}</span>
+            <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>
+              {candidateName}
+            </span>
             {score !== undefined && score !== null && (
-              <span
-                style={{
-                  background: getScoreColor(score),
-                  color: '#fff',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  borderRadius: 99,
-                  padding: '2px 8px',
-                  minWidth: 32,
-                  textAlign: 'center'
-                }}
-              >
+              <span style={{
+                background: getScoreColor(score),
+                color: '#fff',
+                fontSize: 11,
+                fontWeight: 700,
+                borderRadius: 99,
+                padding: '2px 8px',
+                minWidth: 32,
+                textAlign: 'center'
+              }}>
                 {score}
               </span>
             )}
@@ -74,28 +73,24 @@ export const CandidateCard = ({ application, index }) => {
 
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             {source && (
-              <span
-                style={{
-                  fontSize: 10,
-                  background: '#e0f2fe',
-                  color: '#0369a1',
-                  borderRadius: 99,
-                  padding: '1px 7px'
-                }}
-              >
+              <span style={{
+                fontSize: 10,
+                background: '#e0f2fe',
+                color: '#0369a1',
+                borderRadius: 99,
+                padding: '1px 7px'
+              }}>
                 {source}
               </span>
             )}
-            <span
-              style={{
-                fontSize: 10,
-                background: `${AI_STATUS_COLORS[aiStatus]}22`,
-                color: AI_STATUS_COLORS[aiStatus],
-                borderRadius: 99,
-                padding: '1px 7px',
-                fontWeight: 600
-              }}
-            >
+            <span style={{
+              fontSize: 10,
+              background: `${AI_STATUS_COLORS[aiStatus]}22`,
+              color: AI_STATUS_COLORS[aiStatus],
+              borderRadius: 99,
+              padding: '1px 7px',
+              fontWeight: 600
+            }}>
               {AI_STATUS_LABELS[aiStatus] || aiStatus}
             </span>
           </div>

@@ -1,6 +1,8 @@
 import { submitApplication } from '../services/application.service.js'
 import { changeStage } from '../services/stageChange.service.js'
 import { applicationRepository } from '../repositories/application.repository.js'
+import { aiEvaluationRepository } from '../repositories/aiEvaluation.repository.js'
+import { fileMetadataRepository } from '../repositories/fileMetadata.repository.js'
 import { sendSuccess } from '../utils/apiResponse.js'
 import { AppError } from '../utils/AppError.js'
 
@@ -74,6 +76,75 @@ export const getApplicationsByJobController = async (req, res, next) => {
     const applications = await applicationRepository.findByJob(jobId)
 
     sendSuccess(res, { applications })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const getMyApplicationsController = async (req, res, next) => {
+  try {
+    if (!req.user?.id) {
+      throw new AppError('Unauthorized', 401)
+    }
+
+    const applications = await applicationRepository.findByCandidate(req.user.id)
+    sendSuccess(res, { applications })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const getApplicationByIdController = async (req, res, next) => {
+  try {
+    const { appId } = req.params
+
+    const application = await applicationRepository.findByIdForReview(appId)
+
+    // Candidate can only access own applications.
+    if (req.user.role === 'candidate') {
+      if (String(application.candidateId?._id || application.candidateId) !== String(req.user.id)) {
+        throw new AppError('Bạn không có quyền truy cập hồ sơ này', 403)
+      }
+    }
+
+    sendSuccess(res, { application })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const getAIEvaluationController = async (req, res, next) => {
+  try {
+    const { appId } = req.params
+
+    // HR/Admin can see all evaluations; Candidate only sees own application.
+    if (req.user.role === 'candidate') {
+      const application = await applicationRepository.findById(appId)
+      if (String(application.candidateId) !== String(req.user.id)) {
+        throw new AppError('Bạn không có quyền truy cập đánh giá này', 403)
+      }
+    }
+
+    const evaluation = await aiEvaluationRepository.findByApplication(appId)
+    sendSuccess(res, { evaluation })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const getFileMetaController = async (req, res, next) => {
+  try {
+    const { appId } = req.params
+
+    if (req.user.role === 'candidate') {
+      const application = await applicationRepository.findById(appId)
+      if (String(application.candidateId) !== String(req.user.id)) {
+        throw new AppError('Bạn không có quyền truy cập tệp này', 403)
+      }
+    }
+
+    const fileMeta = await fileMetadataRepository.findByApplication(appId)
+    sendSuccess(res, { fileMeta })
   } catch (error) {
     next(error)
   }

@@ -47,8 +47,8 @@ export const KanbanBoard = ({ jobId }) => {
             padding: '6px 14px',
             borderRadius: 6,
             border: '1px solid #d1d5db',
-            background: showRejected ? '#fee2e2' : '#f8fafc',
-            color: showRejected ? '#ef4444' : '#64748b',
+            background: showRejected ? '#fee2e2' : '#ffffff',
+            color: showRejected ? '#b91c1c' : '#1c1c1c',
             cursor: 'pointer',
             fontWeight: 600
           }}

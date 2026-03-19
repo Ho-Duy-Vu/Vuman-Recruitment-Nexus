@@ -27,6 +27,11 @@ class AIEvaluationRepository {
     return updated
   }
 
+  async findManyByApplications(applicationIds) {
+    const docs = await AIEvaluation.find({ applicationId: { $in: applicationIds } }).lean()
+    return docs
+  }
+
   _checkDiscrepancy(matchingScore, hrDecision) {
     const aiPositive = matchingScore >= 60
     const hrPositive = ['pass', 'hired', 'interview'].includes(hrDecision?.toLowerCase())

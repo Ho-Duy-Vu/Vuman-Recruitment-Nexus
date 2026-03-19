@@ -4,7 +4,11 @@ import {
   submitApplicationController,
   changeStageController,
   updateNoteController,
-  getApplicationsByJobController
+  getApplicationsByJobController,
+  getMyApplicationsController,
+  getApplicationByIdController,
+  getAIEvaluationController,
+  getFileMetaController
 } from '../controllers/application.controller.js'
 import { authenticate } from '../middlewares/authenticate.js'
 import { allowRoles } from '../middlewares/authorize.js'
@@ -29,6 +33,34 @@ router.get(
   authenticate,
   allowRoles('hr', 'admin'),
   getApplicationsByJobController
+)
+
+router.get(
+  '/applications/my',
+  authenticate,
+  allowRoles('candidate'),
+  getMyApplicationsController
+)
+
+router.get(
+  '/applications/:appId',
+  authenticate,
+  allowRoles('hr', 'admin', 'candidate'),
+  getApplicationByIdController
+)
+
+router.get(
+  '/applications/:appId/ai-evaluation',
+  authenticate,
+  allowRoles('hr', 'admin', 'candidate'),
+  getAIEvaluationController
+)
+
+router.get(
+  '/applications/:appId/file-meta',
+  authenticate,
+  allowRoles('hr', 'admin', 'candidate'),
+  getFileMetaController
 )
 
 router.patch(

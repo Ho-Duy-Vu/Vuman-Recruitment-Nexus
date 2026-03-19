@@ -1,6 +1,21 @@
 import { jobRepository } from '../repositories/job.repository.js'
 import { AppError } from '../utils/AppError.js'
 
+const makeJobCode = ({ department, title }) => {
+  const dep = String(department || 'JOB')
+    .trim()
+    .slice(0, 3)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '') || 'JOB'
+  const t = String(title || '')
+    .trim()
+    .slice(0, 2)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  const rand = Math.random().toString(16).slice(2, 6).toUpperCase()
+  return `${dep}${t}-${rand}`
+}
+
 export const createJob = async (hrId, jobData) => {
   if (!jobData.title || !jobData.title.trim()) {
     throw new AppError('Title is required', 400)
@@ -10,6 +25,10 @@ export const createJob = async (hrId, jobData) => {
     title: jobData.title,
     description: jobData.description,
     department: jobData.department,
+    location: jobData.location,
+    workMode: jobData.workMode,
+    employmentType: jobData.employmentType,
+    jobCode: jobData.jobCode?.trim() || makeJobCode(jobData),
     requiredSkills: jobData.requiredSkills || [],
     status: 'draft',
     createdBy: hrId,

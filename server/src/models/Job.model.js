@@ -3,6 +3,8 @@ import mongoose from 'mongoose'
 const { Schema } = mongoose
 
 const JOB_STATUSES = ['draft', 'open', 'closed']
+const WORK_MODES = ['onsite', 'hybrid', 'remote']
+const EMPLOYMENT_TYPES = ['full_time', 'part_time']
 
 const jobSchema = new Schema(
   {
@@ -18,6 +20,26 @@ const jobSchema = new Schema(
       maxlength: 5000
     },
     department: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    location: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    workMode: {
+      type: String,
+      enum: WORK_MODES,
+      default: 'onsite'
+    },
+    employmentType: {
+      type: String,
+      enum: EMPLOYMENT_TYPES,
+      default: 'full_time'
+    },
+    jobCode: {
       type: String,
       required: true,
       trim: true
@@ -52,6 +74,7 @@ const jobSchema = new Schema(
 
 jobSchema.index({ status: 1 })
 jobSchema.index({ department: 1 })
+jobSchema.index({ jobCode: 1 })
 jobSchema.index({ createdBy: 1 })
 
 export const Job = mongoose.model('Job', jobSchema)
