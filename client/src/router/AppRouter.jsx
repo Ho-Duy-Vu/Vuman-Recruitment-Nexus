@@ -5,6 +5,7 @@ import { ApplyPage } from '../pages/public/ApplyPage'
 import { KanbanPage } from '../pages/hr/KanbanPage'
 import { JobManagementPage } from '../pages/hr/JobManagementPage'
 import { ApplicationReviewPage } from '../pages/hr/ApplicationReviewPage'
+import { CandidatesDashboardPage } from '../pages/hr/CandidatesDashboardPage'
 import { LoginPage } from '../pages/auth/LoginPage'
 import { RegisterPage } from '../pages/auth/RegisterPage'
 import { ForgotPasswordPage } from '../pages/auth/ForgotPasswordPage'
@@ -45,6 +46,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute allowedRoles={['hr', 'admin']}>
             <KanbanPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/hr/candidates"
+        element={
+          <ProtectedRoute allowedRoles={['hr', 'admin']}>
+            <CandidatesDashboardPage />
           </ProtectedRoute>
         }
       />

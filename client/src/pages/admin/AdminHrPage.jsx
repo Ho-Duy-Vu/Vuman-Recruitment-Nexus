@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { createHR, deleteHR, fetchHRList, forceResetHRPassword, updateHR } from '../../api/admin.api'
+import { createHR, deleteHR, fetchHRList, updateHR } from '../../api/admin.api'
 
 export function AdminHrPage() {
   const navigate = useNavigate()
@@ -12,7 +12,8 @@ export function AdminHrPage() {
   const [form, setForm] = useState({
     email: '',
     fullName: '',
-    department: ''
+    department: '',
+    password: ''
   })
 
   const load = async () => {
@@ -38,19 +39,9 @@ export function AdminHrPage() {
     try {
       const created = await createHR(form)
       setHrUsers((p) => [created.user, ...p].filter(Boolean))
-      setForm({ email: '', fullName: '', department: '' })
+      setForm({ email: '', fullName: '', department: '', password: '' })
     } catch (e2) {
       setError(e2?.response?.data?.message || 'Tạo HR thất bại.')
-    }
-  }
-
-  const handleForceReset = async (id) => {
-    setError(null)
-    try {
-      await forceResetHRPassword(id)
-      await load()
-    } catch (e) {
-      setError(e?.response?.data?.message || 'Không thể force reset mật khẩu.')
     }
   }
 
@@ -82,7 +73,7 @@ export function AdminHrPage() {
         </button>
         <h1 className="apply-title">Quản trị HR</h1>
         <p className="apply-section-description">
-          Tạo mới tài khoản HR, cập nhật thông tin và force reset mật khẩu (demo).
+          Tạo mới tài khoản HR bằng email + password do admin cung cấp.
         </p>
       </div>
 
@@ -90,39 +81,54 @@ export function AdminHrPage() {
         <h2 className="candidate-section-title">Tạo tài khoản HR</h2>
 
         <form onSubmit={handleCreate} className="admin-form">
-          <label className="login-field">
-            Email <span className="required">*</span>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              required
-            />
-          </label>
+          <div className="admin-hr-form-grid">
+            <label className="login-field">
+              Email <span className="required"></span>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                required
+              />
+            </label>
 
-          <label className="login-field">
-            Họ và tên <span className="required">*</span>
-            <input
-              type="text"
-              value={form.fullName}
-              onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-              required
-            />
-          </label>
+            <label className="login-field">
+              Họ và tên <span className="required"></span>
+              <input
+                type="text"
+                value={form.fullName}
+                onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                required
+              />
+            </label>
 
-          <label className="login-field">
-            Bộ phận <span className="required">*</span>
-            <input
-              type="text"
-              value={form.department}
-              onChange={(e) => setForm({ ...form, department: e.target.value })}
-              required
-            />
-          </label>
+            <label className="login-field">
+              Bộ phận <span className="required"></span>
+              <input
+                type="text"
+                value={form.department}
+                onChange={(e) => setForm({ ...form, department: e.target.value })}
+                required
+              />
+            </label>
 
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            Tạo HR
-          </button>
+            <label className="login-field">
+              Password <span className="required"></span>
+              <input
+                type="password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                required
+              />
+            </label>
+          </div>
+
+          <div className="admin-hr-form-actions">
+            <button type="submit" className="btn btn-primary" disabled={loading || !form.password}>
+              {loading ? 'Đang tạo...' : 'Tạo HR'}
+            </button>
+            <div className="admin-hr-form-hint">Mật khẩu tối thiểu 6 ký tự.</div>
+          </div>
         </form>
 
         {error && <p className="error-text">{error}</p>}
@@ -149,13 +155,18 @@ export function AdminHrPage() {
               </div>
 
               <div className="admin-hr-actions">
-                <button type="button" className="btn btn-secondary-blue" onClick={() => handleForceReset(u._id)}>
-                  Force reset
-                </button>
                 <button type="button" className="btn btn-secondary" onClick={() => handleToggleActive(u._id, !u.isActive)}>
                   {u.isActive ? 'Tạm khóa' : 'Mở lại'}
                 </button>
-                <button type="button" className="btn btn-secondary" onClick={() => handleSoftDelete(u._id)}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    // eslint-disable-next-line no-alert
+                    const ok = window.confirm('Bạn chắc chắn muốn xóa tài khoản HR này?')
+                    if (ok) void handleSoftDelete(u._id)
+                  }}
+                >
                   Xóa
                 </button>
               </div>

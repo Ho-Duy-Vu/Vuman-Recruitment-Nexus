@@ -5,6 +5,7 @@ import adminRoutes from './admin.routes.js'
 import jobRoutes from './job.routes.js'
 import applicationRoutes from './application.routes.js'
 import filesRoutes from './files.routes.js'
+import candidateTasksRoutes from './candidateTasks.routes.js'
 
 const router = express.Router()
 
@@ -17,5 +18,6 @@ router.use('/admin', adminRoutes)
 router.use('/', jobRoutes)
 router.use('/', applicationRoutes)
 router.use('/', filesRoutes)
+router.use('/', candidateTasksRoutes)
 
 export default router

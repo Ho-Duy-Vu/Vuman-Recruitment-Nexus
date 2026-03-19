@@ -21,8 +21,8 @@ export const getOpenJobsController = async (req, res, next) => {
 
 export const getAllJobsController = async (req, res, next) => {
   try {
-    const { status, department, page, limit } = req.query
-    const result = await getJobs({ status, department, page, limit })
+    const { status, department, employmentType, location, workMode, page, limit } = req.query
+    const result = await getJobs({ status, department, employmentType, location, workMode, page, limit })
     sendSuccess(res, result)
   } catch (error) {
     next(error)

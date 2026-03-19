@@ -6,9 +6,11 @@ import {
   updateNoteController,
   getApplicationsByJobController,
   getMyApplicationsController,
+  getAllApplicationsForHRController,
   getApplicationByIdController,
   getAIEvaluationController,
-  getFileMetaController
+  getFileMetaController,
+  withdrawApplicationController
 } from '../controllers/application.controller.js'
 import { authenticate } from '../middlewares/authenticate.js'
 import { allowRoles } from '../middlewares/authorize.js'
@@ -40,6 +42,13 @@ router.get(
   authenticate,
   allowRoles('candidate'),
   getMyApplicationsController
+)
+
+router.get(
+  '/applications/hr',
+  authenticate,
+  allowRoles('hr', 'admin'),
+  getAllApplicationsForHRController
 )
 
 router.get(
@@ -77,6 +86,13 @@ router.patch(
   allowRoles('hr', 'admin'),
   validate(updateNoteSchema),
   updateNoteController
+)
+
+router.delete(
+  '/applications/:appId',
+  authenticate,
+  allowRoles('candidate'),
+  withdrawApplicationController
 )
 
 export default router

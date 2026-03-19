@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useSelector } from 'react-redux'
 import { fetchOpenJobs } from '../../api/job.api'
+import { selectCurrentUser, selectIsAuthenticated } from '../../store/authSlice'
 
 const distinctDepartments = (jobs) => {
   const set = new Set()
@@ -14,7 +16,19 @@ export function JobListPage() {
   const [error, setError] = useState(null)
   const [departmentFilter, setDepartmentFilter] = useState('')
   const [keyword, setKeyword] = useState('')
+  const [employmentTypeFilter, setEmploymentTypeFilter] = useState('')
+  const [locationFilter, setLocationFilter] = useState('')
+  const [workModeFilter, setWorkModeFilter] = useState('')
   const navigate = useNavigate()
+  const isAuthenticated = useSelector(selectIsAuthenticated)
+  const user = useSelector(selectCurrentUser)
+  const showCandidateFooter = isAuthenticated && user?.role === 'candidate'
+
+  const normalizeLocationForCompare = (v) => String(v || '')
+    .toLowerCase()
+    .replace(/^tp\.?\s*/i, '')
+    .replace(/\./g, '')
+    .trim()
 
   useEffect(() => {
     let mounted = true
@@ -35,6 +49,9 @@ export function JobListPage() {
 
   const filteredJobs = useMemo(() => jobs.filter((job) => {
     if (departmentFilter && job.department !== departmentFilter) return false
+    if (employmentTypeFilter && job.employmentType !== employmentTypeFilter) return false
+    if (locationFilter && normalizeLocationForCompare(job.location) !== normalizeLocationForCompare(locationFilter)) return false
+    if (workModeFilter && job.workMode !== workModeFilter) return false
     if (keyword) {
       const lower = keyword.toLowerCase()
       const inTitle = job.title?.toLowerCase().includes(lower)
@@ -87,9 +104,42 @@ export function JobListPage() {
                 <option key={dept} value={dept}>{dept}</option>
               ))}
             </select>
-            <button type="button" className="career-filter">Loại hình ▾</button>
-            <button type="button" className="career-filter">Địa điểm ▾</button>
-            <button type="button" className="career-filter">Thêm ▾</button>
+            <select
+              value={employmentTypeFilter}
+              onChange={(e) => setEmploymentTypeFilter(e.target.value)}
+              className="career-filter"
+              style={{ height: 32 }}
+            >
+              <option value="">Loại hình ▾</option>
+              <option value="part_time">Part time</option>
+              <option value="full_time">Fulltime</option>
+            </select>
+            <select
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="career-filter"
+              style={{ height: 32 }}
+            >
+              <option value="">Địa điểm ▾</option>
+              <option value="TP. Hồ Chí Minh">TP. Hồ Chí Minh</option>
+              <option value="Hà Nội">HÀ NÔI</option>
+              <option value="Đà Nẵng">ĐÀ NẴNG</option>
+              <option value="US">US</option>
+              <option value="Hong Kong">HONGKONG</option>
+              <option value="Singapore">SINGAPORE</option>
+              <option value="Malaysia">MALAYSIA</option>
+            </select>
+            <select
+              value={workModeFilter}
+              onChange={(e) => setWorkModeFilter(e.target.value)}
+              className="career-filter"
+              style={{ height: 32 }}
+            >
+              <option value="">Thêm ▾</option>
+              <option value="onsite">Onsite</option>
+              <option value="hybrid">Hybrid</option>
+              <option value="remote">Remote</option>
+            </select>
           </div>
         </div>
       </div>

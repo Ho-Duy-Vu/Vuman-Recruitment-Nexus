@@ -101,6 +101,10 @@ cd client
 npm test
 ```
 
+## Git Flow (Branching & Release)
+
+Xem hướng dẫn chi tiết tại `docs/GIT_FLOW.md`.
+
 ## Ghi chú phân quyền
 
 - **Candidate**: chỉ được nộp hồ sơ và xem dữ liệu của mình

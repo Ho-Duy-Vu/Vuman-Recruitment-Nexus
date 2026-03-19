@@ -55,6 +55,9 @@ export function Navbar() {
             <NavLink to="/hr/jobs" className="navbar-link">
               Quản lý công việc
             </NavLink>
+            <NavLink to="/hr/candidates" className="navbar-link">
+              Dashboard ứng viên
+            </NavLink>
           </>
         )}
 

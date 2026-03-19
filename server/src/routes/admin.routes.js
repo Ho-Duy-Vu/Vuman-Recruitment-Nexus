@@ -3,7 +3,6 @@ import express from 'express'
 import {
   createHRController,
   deleteHRController,
-  forceResetPasswordController,
   listHRController,
   updateHRController
 } from '../controllers/admin.controller.js'
@@ -20,7 +19,6 @@ router.post('/hr', validate(createHrSchema), createHRController)
 router.get('/hr', listHRController)
 router.patch('/hr/:id', validate(updateHrSchema), updateHRController)
 router.delete('/hr/:id', deleteHRController)
-router.post('/hr/:id/force-reset-password', forceResetPasswordController)
 
 export default router
 

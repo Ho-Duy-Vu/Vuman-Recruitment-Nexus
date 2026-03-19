@@ -32,9 +32,7 @@ export const getCvUrlController = async (req, res, next) => {
 
 export const serveFileController = async (req, res, next) => {
   try {
-    const { id: userId } = req.user
-
-    verifySignedUrl(req.query, userId)
+    verifySignedUrl(req.query)
 
     const filePath = req.query.path
 

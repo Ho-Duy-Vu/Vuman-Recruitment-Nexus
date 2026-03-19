@@ -45,7 +45,7 @@ class ApplicationRepository {
     // HR review page needs candidate/job fields for UI.
     const app = await Application.findById(id)
       .populate('candidateId', 'fullName email')
-      .populate('jobId', 'title department location employmentType jobCode createdAt')
+      .populate('jobId', 'title department location employmentType workMode jobCode createdAt')
       .lean()
 
     if (!app) {
@@ -84,9 +84,20 @@ class ApplicationRepository {
 
   async findByCandidate(candidateId) {
     const apps = await Application.find({ candidateId })
-      .populate('jobId', 'title department location employmentType jobCode createdAt')
+      .populate('jobId', 'title department location employmentType workMode jobCode createdAt')
       .lean()
     return apps
+  }
+
+  async withdrawApplication(appId, candidateId) {
+    const deleted = await Application.findOneAndDelete({ _id: appId, candidateId })
+      .lean()
+
+    if (!deleted) {
+      throw new AppError('Application not found', 404)
+    }
+
+    return deleted
   }
 
   async updateNote(id, hrNote) {
@@ -101,6 +112,28 @@ class ApplicationRepository {
     }
 
     return app
+  }
+
+  async findAllForHR({ stage, page = 1, limit = 20 } = {}) {
+    const query = {}
+    if (stage) query.stage = stage
+
+    const pageNum = Number(page) || 1
+    const limitNum = Math.min(Number(limit) || 20, 100)
+    const skip = (pageNum - 1) * limitNum
+
+    const [items, total] = await Promise.all([
+      Application.find(query)
+        .populate('candidateId', 'fullName email')
+        .populate('jobId', 'title department location employmentType workMode jobCode')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Application.countDocuments(query)
+    ])
+
+    return { items, total, page: pageNum, limit: limitNum }
   }
 }
 

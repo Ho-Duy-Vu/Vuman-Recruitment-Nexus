@@ -29,6 +29,26 @@ export const saveCV = async (buffer, originalName, jobId, mimeType) => {
   }
 }
 
+export const saveUploadedDocument = async (buffer, originalName, dirParts = [], detectedMimeType) => {
+  const timestamp = Date.now()
+  const randomHex = crypto.randomBytes(8).toString('hex')
+  const ext = path.extname(originalName || '') || ''
+  const fileName = `${timestamp}-${randomHex}${ext}`
+
+  const dir = path.join(UPLOAD_ROOT, ...(Array.isArray(dirParts) ? dirParts : []))
+  await fs.mkdir(dir, { recursive: true })
+
+  const filePath = path.join(dir, fileName)
+  await fs.writeFile(filePath, buffer)
+
+  return {
+    filePath,
+    fileName,
+    mimeType: detectedMimeType,
+    sizeBytes: buffer.length
+  }
+}
+
 export const generateSignedUrl = (filePath, userId) => {
   const exp = Date.now() + 15 * 60 * 1000
   const uid = String(userId)
@@ -48,9 +68,12 @@ export const verifySignedUrl = (query, requestingUserId) => {
     throw new AppError('Chữ ký không hợp lệ', 403)
   }
 
-  // Explicit access control: signed URL belongs to a specific user
-  if (String(signedUserId) !== String(requestingUserId)) {
-    throw new AppError('Không có quyền truy cập', 403)
+  // Nếu có requestingUserId (được xác thực), enforce user khớp với link.
+  // Nếu không (truy cập qua signed URL thuần), chỉ kiểm tra chữ ký + hạn.
+  if (requestingUserId !== undefined && requestingUserId !== null) {
+    if (String(signedUserId) !== String(requestingUserId)) {
+      throw new AppError('Không có quyền truy cập', 403)
+    }
   }
 
   const expNum = Number(exp)

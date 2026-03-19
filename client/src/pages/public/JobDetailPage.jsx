@@ -15,6 +15,7 @@ export function JobDetailPage() {
   const navigate = useNavigate()
   const isAuthenticated = useSelector(selectIsAuthenticated)
   const user = useSelector(selectCurrentUser)
+  const showCandidateFooter = isAuthenticated && user?.role === 'candidate'
 
   useEffect(() => {
     let mounted = true
@@ -185,6 +186,30 @@ export function JobDetailPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {showCandidateFooter && (
+        <footer className="candidate-footer-follow">
+          <div className="candidate-footer-title">Theo dõi chúng tôi</div>
+          <div className="candidate-follow-row candidate-follow-row--footer">
+            <span className="candidate-follow-icon">X</span>
+            <span className="candidate-follow-icon">YouTube</span>
+            <span className="candidate-follow-icon">LinkedIn</span>
+            <span className="candidate-follow-icon">Facebook</span>
+          </div>
+          <div className="candidate-footer-links">
+            <a
+              href="#"
+              className="candidate-about-link"
+              onClick={(e) => e.preventDefault()}
+            >
+              Chính sách quyền riêng tư của ứng viên
+            </a>
+          </div>
+          <div className="candidate-footer-copy">
+            © {new Date().getFullYear()} Vuman Recruitment Nexus
+          </div>
+        </footer>
       )}
       </div>
     </main>

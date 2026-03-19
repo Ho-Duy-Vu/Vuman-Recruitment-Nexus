@@ -94,6 +94,16 @@ export const getMyApplicationsController = async (req, res, next) => {
   }
 }
 
+export const getAllApplicationsForHRController = async (req, res, next) => {
+  try {
+    const { stage, page, limit } = req.query
+    const result = await applicationRepository.findAllForHR({ stage, page, limit })
+    sendSuccess(res, result)
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const getApplicationByIdController = async (req, res, next) => {
   try {
     const { appId } = req.params
@@ -145,6 +155,18 @@ export const getFileMetaController = async (req, res, next) => {
 
     const fileMeta = await fileMetadataRepository.findByApplication(appId)
     sendSuccess(res, { fileMeta })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const withdrawApplicationController = async (req, res, next) => {
+  try {
+    const { appId } = req.params
+    const candidateId = req.user.id
+
+    await applicationRepository.withdrawApplication(appId, candidateId)
+    sendSuccess(res, { message: 'Rút đơn ứng tuyển thành công' })
   } catch (error) {
     next(error)
   }

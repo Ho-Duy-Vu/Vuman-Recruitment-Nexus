@@ -2,7 +2,15 @@ import { Job } from '../models/Job.model.js'
 import { AppError } from '../utils/AppError.js'
 
 class JobRepository {
-  async findAll({ status, department, page = 1, limit = 20 } = {}) {
+  async findAll({
+    status,
+    department,
+    employmentType,
+    location,
+    workMode,
+    page = 1,
+    limit = 20
+  } = {}) {
     const query = {}
 
     if (status) {
@@ -10,6 +18,15 @@ class JobRepository {
     }
     if (department) {
       query.department = department
+    }
+    if (employmentType) {
+      query.employmentType = employmentType
+    }
+    if (location) {
+      query.location = location
+    }
+    if (workMode) {
+      query.workMode = workMode
     }
 
     const pageNum = Number(page) || 1
@@ -68,7 +85,11 @@ class JobRepository {
   }
 
   async softDelete(id) {
-    return this.updateById(id, { status: 'closed' })
+    const deleted = await Job.findByIdAndDelete(id).lean()
+    if (!deleted) {
+      throw new AppError('Job not found', 404)
+    }
+    return deleted
   }
 }
 

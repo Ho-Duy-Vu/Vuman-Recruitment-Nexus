@@ -50,7 +50,10 @@ export function JobManagementPage() {
 
   const [filters, setFilters] = useState({
     status: '',
-    department: ''
+    department: '',
+    employmentType: '',
+    location: '',
+    workMode: ''
   })
 
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -77,7 +80,7 @@ export function JobManagementPage() {
   useEffect(() => {
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, filters.status, filters.department])
+  }, [page, filters.status, filters.department, filters.employmentType, filters.location, filters.workMode])
 
   const openCreate = () => {
     setEditing(null)
@@ -214,6 +217,51 @@ export function JobManagementPage() {
               placeholder="Lọc theo bộ phận (ví dụ: Engineering)"
               style={{ maxWidth: 340, background: '#fff', color: '#1c1c1c' }}
             />
+            <select
+              className="career-filter"
+              value={filters.employmentType}
+              onChange={(e) => {
+                setPage(1)
+                setFilters((p) => ({ ...p, employmentType: e.target.value }))
+              }}
+              style={{ background: '#fff', color: '#1c1c1c' }}
+            >
+              <option value="">Loại hình</option>
+              <option value="part_time">part time</option>
+              <option value="full_time">fulltime</option>
+            </select>
+            <select
+              className="career-filter"
+              value={filters.location}
+              onChange={(e) => {
+                setPage(1)
+                setFilters((p) => ({ ...p, location: e.target.value }))
+              }}
+              style={{ background: '#fff', color: '#1c1c1c' }}
+            >
+              <option value="">Địa điểm</option>
+              <option value="TP. Hồ Chí Minh">HCM</option>
+              <option value="Hà Nội">HA NÔI</option>
+              <option value="Đà Nẵng">DA NANG</option>
+              <option value="US">US</option>
+              <option value="Hong Kong">HONGKONG</option>
+              <option value="Singapore">SINGAPO</option>
+              <option value="Malaysia">MALAY</option>
+            </select>
+            <select
+              className="career-filter"
+              value={filters.workMode}
+              onChange={(e) => {
+                setPage(1)
+                setFilters((p) => ({ ...p, workMode: e.target.value }))
+              }}
+              style={{ background: '#fff', color: '#1c1c1c' }}
+            >
+              <option value="">Thêm ▾</option>
+              <option value="onsite">onsite</option>
+              <option value="hybrid">hybrid</option>
+              <option value="remote">remote</option>
+            </select>
             <button type="button" className="btn btn-secondary" onClick={() => void load()} disabled={loading}>
               {loading ? 'Đang tải...' : 'Làm mới'}
             </button>

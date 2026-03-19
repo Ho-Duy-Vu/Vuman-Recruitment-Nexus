@@ -13,6 +13,7 @@ router.get(
   getCvUrlController
 )
 
-router.get('/files/serve', authenticate, serveFileController)
+// File serve dùng signed URL, không cần JWT, kiểm tra qua chữ ký
+router.get('/files/serve', serveFileController)
 
 export default router

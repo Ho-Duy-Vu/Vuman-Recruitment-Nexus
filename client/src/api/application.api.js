@@ -29,3 +29,9 @@ export const updateApplicationNote = (appId, hrNote) =>
 
 export const fetchCvUrl = (appId) =>
   api.get(`/applications/${appId}/cv-url`).then((r) => r.data.data)
+
+export const withdrawApplication = (appId) =>
+  api.delete(`/applications/${appId}`).then((r) => r.data.data)
+
+export const fetchAllApplicationsForHR = ({ stage, page, limit } = {}) =>
+  api.get('/applications/hr', { params: { stage, page, limit } }).then((r) => r.data.data)

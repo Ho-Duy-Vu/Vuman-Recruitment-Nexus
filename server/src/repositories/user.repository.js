@@ -38,6 +38,18 @@ class UserRepository {
     return user
   }
 
+  async deleteById(id) {
+    const user = await User.findOneAndDelete({ _id: id, role: 'hr' })
+      .select('-passwordHash -refreshToken')
+      .lean()
+
+    if (!user) {
+      throw new AppError('User not found', 404)
+    }
+
+    return user
+  }
+
   async findAllHR() {
     const users = await User.find({ role: 'hr' }).select('-passwordHash -refreshToken').lean()
     return users
