@@ -8,15 +8,16 @@ import {
   getMyApplicationsController,
   getAllApplicationsForHRController,
   getApplicationByIdController,
-  getAIEvaluationController,
   getFileMetaController,
-  withdrawApplicationController
+  withdrawApplicationController,
+  bulkRejectApplicationsController,
+  getInterviewForApplicationController
 } from '../controllers/application.controller.js'
 import { authenticate } from '../middlewares/authenticate.js'
 import { allowRoles } from '../middlewares/authorize.js'
 import { uploadCV } from '../middlewares/uploadCV.js'
 import { validate } from '../middlewares/validate.js'
-import { submitApplicationSchema } from '../validators/application.validator.js'
+import { submitApplicationSchema, bulkRejectSchema } from '../validators/application.validator.js'
 import { changeStageSchema, updateNoteSchema } from '../validators/stageChange.validator.js'
 
 const router = express.Router()
@@ -28,6 +29,14 @@ router.post(
   uploadCV,
   validate(submitApplicationSchema),
   submitApplicationController
+)
+
+router.post(
+  '/applications/bulk-reject',
+  authenticate,
+  allowRoles('hr', 'admin'),
+  validate(bulkRejectSchema),
+  bulkRejectApplicationsController
 )
 
 router.get(
@@ -52,17 +61,17 @@ router.get(
 )
 
 router.get(
+  '/applications/:appId/interview',
+  authenticate,
+  allowRoles('hr', 'admin', 'candidate'),
+  getInterviewForApplicationController
+)
+
+router.get(
   '/applications/:appId',
   authenticate,
   allowRoles('hr', 'admin', 'candidate'),
   getApplicationByIdController
-)
-
-router.get(
-  '/applications/:appId/ai-evaluation',
-  authenticate,
-  allowRoles('hr', 'admin', 'candidate'),
-  getAIEvaluationController
 )
 
 router.get(

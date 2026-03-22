@@ -1,6 +1,14 @@
 import { Application } from '../models/Application.model.js'
 import { AppError } from '../utils/AppError.js'
-import { aiEvaluationRepository } from './aiEvaluation.repository.js'
+import { CandidateTask } from '../models/CandidateTask.model.js'
+import { CandidateTaskDocument } from '../models/CandidateTaskDocument.model.js'
+
+/** DB cũ có thể còn `aiStatus` — không còn trong schema, bỏ khỏi JSON trả client */
+function stripLegacyAiFields(doc) {
+  if (!doc || typeof doc !== 'object') return doc
+  const { aiStatus: _removed, ...rest } = doc
+  return rest
+}
 
 class ApplicationRepository {
   async create(data) {
@@ -19,18 +27,7 @@ class ApplicationRepository {
     const apps = await Application.find({ jobId })
       .populate('candidateId', 'fullName email')
       .lean()
-
-    // Kanban UI sorts/renders based on aiEvaluation.matchingScore
-    const appIds = apps.map((a) => a._id)
-    const evaluations = await aiEvaluationRepository.findManyByApplications(appIds)
-    const evalMap = new Map(
-      evaluations.map((e) => [String(e.applicationId), e])
-    )
-
-    return apps.map((app) => ({
-      ...app,
-      aiEvaluation: evalMap.get(String(app._id)) || null
-    }))
+    return apps.map(stripLegacyAiFields)
   }
 
   async findById(id) {
@@ -38,7 +35,7 @@ class ApplicationRepository {
     if (!app) {
       throw new AppError('Application not found', 404)
     }
-    return app
+    return stripLegacyAiFields(app)
   }
 
   async findByIdForReview(id) {
@@ -51,7 +48,7 @@ class ApplicationRepository {
     if (!app) {
       throw new AppError('Application not found', 404)
     }
-    return app
+    return stripLegacyAiFields(app)
   }
 
   async updateStage(id, stage) {
@@ -65,21 +62,7 @@ class ApplicationRepository {
       throw new AppError('Application not found', 404)
     }
 
-    return app
-  }
-
-  async updateAiStatus(id, aiStatus) {
-    const app = await Application.findByIdAndUpdate(
-      id,
-      { aiStatus },
-      { returnDocument: 'after', runValidators: true }
-    ).lean()
-
-    if (!app) {
-      throw new AppError('Application not found', 404)
-    }
-
-    return app
+    return stripLegacyAiFields(app)
   }
 
   async findByCandidate(candidateId) {
@@ -97,6 +80,18 @@ class ApplicationRepository {
       throw new AppError('Application not found', 404)
     }
 
+    // Khi ứng viên rút đơn thì các task gắn với application đó cũng phải biến mất
+    // để đồng bộ UI giữa Candidate và HR/Admin.
+    const deletedTasks = await CandidateTask.find({ applicationId: appId, candidateId })
+      .select('_id')
+      .lean()
+    const taskIds = deletedTasks.map((t) => t._id)
+
+    if (taskIds.length > 0) {
+      await CandidateTaskDocument.deleteMany({ taskId: { $in: taskIds } })
+      await CandidateTask.deleteMany({ _id: { $in: taskIds } })
+    }
+
     return deleted
   }
 
@@ -111,7 +106,7 @@ class ApplicationRepository {
       throw new AppError('Application not found', 404)
     }
 
-    return app
+    return stripLegacyAiFields(app)
   }
 
   async findAllForHR({ stage, page = 1, limit = 20 } = {}) {
@@ -133,7 +128,7 @@ class ApplicationRepository {
       Application.countDocuments(query)
     ])
 
-    return { items, total, page: pageNum, limit: limitNum }
+    return { items: items.map(stripLegacyAiFields), total, page: pageNum, limit: limitNum }
   }
 }
 

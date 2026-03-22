@@ -5,7 +5,6 @@ jest.mock('../../config/env.js', () => ({
     refreshJwtSecret: 'test_refresh_secret_at_least_32_chars',
     mongoUri: 'mongodb://localhost:27017/test',
     redisUrl: 'redis://localhost:6379',
-    geminiApiKey: 'test',
     smtpHost: 'localhost',
     smtpPort: 1025,
     smtpUser: 'test',
@@ -30,12 +29,12 @@ jest.mock('../../utils/cvParser.js', () => ({
   extractText: jest.fn().mockResolvedValue({ text: 'a'.repeat(200), tooShort: false })
 }))
 
-jest.mock('../../queues/ai.queue.js', () => ({
-  addAIJob: jest.fn().mockResolvedValue(undefined)
+jest.mock('../../queues/email.queue.js', () => ({
+  addEmailJob: jest.fn().mockResolvedValue(undefined)
 }))
 
-jest.mock('../../services/email.service.js', () => ({
-  sendApplyConfirm: jest.fn().mockResolvedValue(undefined)
+jest.mock('../../socket/socket.js', () => ({
+  getIO: jest.fn(() => null)
 }))
 
 jest.mock('../../repositories/fileMetadata.repository.js', () => ({
@@ -46,7 +45,7 @@ jest.mock('../../repositories/fileMetadata.repository.js', () => ({
 
 import { submitApplication } from '../../services/application.service.js'
 import { connectTestDB, clearTestDB, disconnectTestDB } from '../setup.js'
-import { addAIJob } from '../../queues/ai.queue.js'
+import { addEmailJob } from '../../queues/email.queue.js'
 import { extractText } from '../../utils/cvParser.js'
 import { fileMetadataRepository } from '../../repositories/fileMetadata.repository.js'
 
@@ -96,11 +95,11 @@ const createTestCandidate = async (email = 'cand@test.com') => {
 const FULL_FORM = { country: 'Vietnam', city: 'Hanoi', gender: 'Male', source: 'LinkedIn', messageToHR: '' }
 
 describe('submitApplication', () => {
-  it('should create application with aiStatus: pending on happy path', async () => {
+  it('should create application on happy path', async () => {
     const job = await createTestJob('open')
     const candidate = await createTestCandidate()
 
-    const { application } = await submitApplication(
+    const { application, tooShort } = await submitApplication(
       candidate._id.toString(),
       job._id.toString(),
       FULL_FORM,
@@ -109,9 +108,13 @@ describe('submitApplication', () => {
       'application/pdf'
     )
 
-    expect(application.aiStatus).toBe('pending')
+    expect(tooShort).toBe(false)
     expect(application.candidateId.toString()).toBe(candidate._id.toString())
     expect(application.jobId.toString()).toBe(job._id.toString())
+    expect(addEmailJob).toHaveBeenCalledWith({
+      type: 'apply_confirm',
+      applicationId: String(application._id)
+    })
   })
 
   it('should call saveCV and extractText once', async () => {
@@ -130,22 +133,6 @@ describe('submitApplication', () => {
 
     expect(saveCV).toHaveBeenCalledTimes(1)
     expect(extractText).toHaveBeenCalledTimes(1)
-  })
-
-  it('should call addAIJob once when cvText is long enough', async () => {
-    const job = await createTestJob('open')
-    const candidate = await createTestCandidate('cand3@test.com')
-
-    await submitApplication(
-      candidate._id.toString(),
-      job._id.toString(),
-      FULL_FORM,
-      Buffer.from('test'),
-      'cv.pdf',
-      'application/pdf'
-    )
-
-    expect(addAIJob).toHaveBeenCalledTimes(1)
   })
 
   it('should throw AppError 400 when job is not open', async () => {
@@ -175,12 +162,12 @@ describe('submitApplication', () => {
     ).rejects.toMatchObject({ statusCode: 409 })
   })
 
-  it('should set aiStatus manual_review and NOT call addAIJob when cvText < 100 chars', async () => {
+  it('should return cvTooShort true when cvText < threshold (no AI pipeline)', async () => {
     extractText.mockResolvedValueOnce({ text: 'short', tooShort: true })
     const job = await createTestJob('open')
     const candidate = await createTestCandidate('cand6@test.com')
 
-    const { application } = await submitApplication(
+    const { application, tooShort } = await submitApplication(
       candidate._id.toString(),
       job._id.toString(),
       FULL_FORM,
@@ -189,8 +176,9 @@ describe('submitApplication', () => {
       'application/pdf'
     )
 
-    expect(application.aiStatus).toBe('manual_review')
-    expect(addAIJob).not.toHaveBeenCalled()
+    expect(tooShort).toBe(true)
+    expect(application.cvText).toBe('short')
+    expect(addEmailJob).toHaveBeenCalled()
   })
 
   it('should create FileMetadata doc after successful application submit', async () => {

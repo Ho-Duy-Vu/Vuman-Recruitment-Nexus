@@ -20,7 +20,26 @@ export const resetPassword = async ({ token, newPassword }) => {
   return res.data.data
 }
 
+export const changePassword = async ({ currentPassword, newPassword }) => {
+  const res = await api.post('/auth/change-password', { currentPassword, newPassword })
+  return res.data.data
+}
+
 export const logoutApi = async () => {
   await api.post('/auth/logout')
+}
+
+/** User đầy đủ từ DB (applyProfile, phone, …) — dùng sau F5 hoặc đồng bộ Redux */
+export const fetchCurrentUser = async () => {
+  const res = await api.get('/auth/me')
+  const d = res.data?.data
+  return d?.user ?? d
+}
+
+/** Ứng viên: cập nhật hồ sơ (đồng bộ form Apply) */
+export const updateCandidateProfile = async (body) => {
+  const res = await api.patch('/auth/profile', body)
+  const d = res.data?.data
+  return d?.user ?? d
 }
 

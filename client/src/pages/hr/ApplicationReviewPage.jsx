@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useSelector } from 'react-redux'
 import api from '../../api/axios.instance'
 import { fetchCvUrl, changeApplicationStage, updateApplicationNote } from '../../api/application.api'
-import { AIScoreCard } from '../../components/application/AIScoreCard'
 import { ScheduleModal } from '../../components/application/ScheduleModal'
+import { DashboardShell } from '../../components/dashboard/DashboardShell'
+import { HR_APPLICATION_REVIEW_NAV } from '../../constants/hrDashboardNav'
+import { selectCurrentUser } from '../../store/authSlice'
+import { ChatBox } from '../../components/chat/ChatBox'
 
 const STAGES = ['Mới', 'Đang xét duyệt', 'Phỏng vấn', 'Đề xuất', 'Đã tuyển', 'Không phù hợp']
 
@@ -26,9 +30,10 @@ const formatFileSize = (bytes) => {
 export const ApplicationReviewPage = () => {
   const { appId } = useParams()
   const navigate = useNavigate()
+  const user = useSelector(selectCurrentUser)
+  const canManage = user?.role === 'hr' || user?.role === 'admin'
 
   const [application, setApplication] = useState(null)
-  const [aiEvaluation, setAiEvaluation] = useState(null)
   const [fileMeta, setFileMeta] = useState(null)
   const [cvUrl, setCvUrl] = useState(null)
   const [hrNote, setHrNote] = useState('')
@@ -41,9 +46,8 @@ export const ApplicationReviewPage = () => {
   const load = useCallback(async () => {
     try {
       setLoading(true)
-      const [appRes, evalRes, metaRes] = await Promise.allSettled([
+      const [appRes, metaRes] = await Promise.allSettled([
         api.get(`/applications/${appId}`),
-        api.get(`/applications/${appId}/ai-evaluation`),
         api.get(`/applications/${appId}/file-meta`)
       ])
 
@@ -51,9 +55,6 @@ export const ApplicationReviewPage = () => {
         const app = appRes.value.data?.data?.application
         setApplication(app)
         setHrNote(app?.hrNote || '')
-      }
-      if (evalRes.status === 'fulfilled') {
-        setAiEvaluation(evalRes.value.data?.data?.evaluation)
       }
       if (metaRes.status === 'fulfilled') {
         setFileMeta(metaRes.value.data?.data?.fileMeta)
@@ -126,11 +127,30 @@ export const ApplicationReviewPage = () => {
   }
 
   const isPdf = fileMeta?.mimeType === 'application/pdf'
+  const form = application.formData || {}
+  const companiesText = Array.isArray(form.companies) ? form.companies.join(', ') : ''
+
+  const degreeLabel = (v) => {
+    if (!v) return '-'
+    if (v === 'bachelor') return 'Bachelor'
+    if (v === 'engineer') return 'Engineer'
+    if (v === 'master') return 'Master'
+    if (v === 'doctor') return 'Doctor'
+    if (v === 'other') return 'Khác'
+    return v
+  }
+
+  const yesNoLabel = (v) => {
+    if (v === 'yes') return 'Có'
+    if (v === 'no') return 'Không'
+    return v || '-'
+  }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
+    <DashboardShell title="Xem hồ sơ ứng tuyển" navItems={HR_APPLICATION_REVIEW_NAV}>
+      <div style={{ background: 'var(--bg-page)' }}>
       {/* Header */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '14px 32px', display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div style={{ background: 'var(--bg-white)', borderBottom: '1px solid var(--border-light)', padding: '14px 32px', display: 'flex', alignItems: 'center', gap: 16 }}>
         <button
           onClick={() => navigate(-1)}
           style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#64748b' }}
@@ -138,14 +158,32 @@ export const ApplicationReviewPage = () => {
           ←
         </button>
         <div>
-          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#1e293b' }}>
-            {application.candidateId?.fullName || 'Ứng viên'}
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>
+            {application.formData?.fullName || application.candidateId?.fullName || 'Ứng viên'}
           </h2>
-          <div style={{ fontSize: 12, color: '#64748b' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             Nộp lúc: {new Date(application.appliedAt).toLocaleString('vi-VN')}
           </div>
         </div>
         <div style={{ flex: 1 }} />
+        {canManage && appId && (
+          <button
+            type="button"
+            onClick={() => navigate(`/hr/chats/${appId}`)}
+            style={{
+              padding: '8px 14px',
+              borderRadius: 10,
+              border: '1px solid #0d9488',
+              background: '#f0fdfa',
+              color: '#0f766e',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            💬 Tin nhắn với ứng viên
+          </button>
+        )}
         <span
           style={{
             background: STAGE_COLORS[application.stage] || '#64748b',
@@ -163,14 +201,14 @@ export const ApplicationReviewPage = () => {
       {/* Body */}
       <div style={{ display: 'flex', gap: 0, maxWidth: 1400, margin: '0 auto', padding: '24px 24px' }}>
         {/* Left panel: CV Viewer (55%) */}
-        <div style={{ flex: '0 0 55%', marginRight: 20 }}>
-          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', height: '80vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ flex: '0 0 55%', marginRight: 20 }}>
+          <div style={{ background: 'var(--bg-white)', borderRadius: 12, border: '1px solid var(--border-light)', overflow: 'hidden', height: '80vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--bg-page)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
                   {fileMeta?.originalName || 'CV của ứng viên'}
                 </div>
-                <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                   {fileMeta && (
                     <>
                       {formatFileSize(fileMeta.sizeBytes)}
@@ -181,7 +219,7 @@ export const ApplicationReviewPage = () => {
                 </div>
               </div>
               {cvUrl && (
-                <a
+                  <a
                   href={cvUrl}
                   target="_blank"
                   rel="noreferrer"
@@ -202,7 +240,7 @@ export const ApplicationReviewPage = () => {
               ) : cvUrl ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
                   <div style={{ fontSize: 48 }}>📄</div>
-                  <div style={{ color: '#64748b', fontSize: 14 }}>File DOCX không thể xem trực tiếp</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>File DOCX không thể xem trực tiếp</div>
                   <a
                     href={cvUrl}
                     download
@@ -223,124 +261,129 @@ export const ApplicationReviewPage = () => {
           </div>
         </div>
 
-        {/* Right panel: AI + HR tools (45%) */}
-        <div style={{ flex: '0 0 45%', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* AI Score */}
-          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '18px 20px' }}>
-            <h3 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700, color: '#1e293b' }}>
-              Phân tích AI
+        {/* Right panel: HR tools (45%) */}
+              <div style={{ flex: '0 0 45%', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Full application info */}
+          <div style={{ background: 'var(--bg-white)', borderRadius: 12, border: '1px solid var(--border-light)', padding: '16px 20px' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+              Thông tin ứng viên
             </h3>
-            <AIScoreCard
-              aiEvaluation={aiEvaluation}
-              aiStatus={application.aiStatus}
-            />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[
+                ['Quốc gia', form.country],
+                ['Thành phố', form.city],
+                ['Giới tính', form.gender],
+                ['Nguồn biết đến', form.source],
+                ['Kỹ năng', form.skills],
+                ['Các công ty đã từng làm', companiesText],
+                ['Đã từng làm ở công ty này chưa?', yesNoLabel(form.workedAtThisCompany)],
+                ['Đại học', form.university],
+                ['Bằng cấp', degreeLabel(form.degreeLevel)],
+                ['Năm tốt nghiệp', form.graduationYear],
+                [
+                  'Portfolio',
+                  form.portfolioUrl
+                    ? <a href={form.portfolioUrl} target="_blank" rel="noreferrer" style={{ color: '#3b82f6', fontWeight: 700, textDecoration: 'none' }}>Mở liên kết</a>
+                    : '-'
+                ],
+                [
+                  'LinkedIn',
+                  form.linkedinUrl
+                    ? <a href={form.linkedinUrl} target="_blank" rel="noreferrer" style={{ color: '#3b82f6', fontWeight: 700, textDecoration: 'none' }}>Mở liên kết</a>
+                    : '-'
+                ],
+                ['Số điện thoại', form.phoneNumber],
+                ['Địa chỉ nhà', form.homeAddress],
+                ['Postal Code', form.postalCode],
+                ['Cho phép dùng CV & cam kết', yesNoLabel(form.cvConsent)],
+                ['Lời nhắn của ứng viên', form.messageToHR || '-']
+              ].map(([label, value]) => (
+                <div key={label} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <div style={{ width: 180, fontSize: 13, color: 'var(--text-muted)', flexShrink: 0, fontWeight: 700 }}>{label}</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+                    {typeof value === 'string' ? (value || '-') : value}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Lời nhắn của ứng viên */}
-          {application.formData?.messageToHR && (
-            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 20px' }}>
-              <h3 style={{ margin: '0 0 10px', fontSize: 14, fontWeight: 700, color: '#1e293b' }}>
-                Lời nhắn của ứng viên
-              </h3>
-              <blockquote style={{
-                margin: 0,
-                padding: '10px 14px',
-                borderLeft: '3px solid #3b82f6',
-                background: '#f0f9ff',
-                borderRadius: '0 8px 8px 0',
-                color: '#1e3a5f',
-                fontSize: 13,
-                lineHeight: 1.7
-              }}>
-                {application.formData.messageToHR}
-              </blockquote>
-            </div>
-          )}
+          {/* (đã hiển thị trong Thông tin ứng viên ở trên) */}
 
           {/* HR Note */}
-          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 20px' }}>
+          <div style={{ background: 'var(--bg-white)', borderRadius: 12, border: '1px solid var(--border-light)', padding: '16px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1e293b' }}>
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                 Ghi chú HR
               </h3>
-              {noteStatus && (
+              {canManage && noteStatus && (
                 <span style={{ fontSize: 12, color: noteStatus.startsWith('Lỗi') ? '#ef4444' : '#22c55e' }}>
                   {noteStatus}
                 </span>
               )}
             </div>
-            <textarea
-              value={hrNote}
-              onChange={(e) => setHrNote(e.target.value)}
-              onBlur={handleNoteBlur}
-              placeholder="Nhập ghi chú về ứng viên này..."
-              style={{
-                width: '100%',
-                minHeight: 90,
-                padding: '8px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: 8,
-                fontSize: 13,
-                resize: 'vertical',
-                boxSizing: 'border-box',
-                fontFamily: 'inherit',
-                lineHeight: 1.6
-              }}
-            />
+            {canManage ? (
+              <textarea
+                value={hrNote}
+                onChange={(e) => setHrNote(e.target.value)}
+                onBlur={handleNoteBlur}
+                placeholder="Nhập ghi chú về ứng viên này..."
+                style={{
+                  width: '100%',
+                  minHeight: 90,
+                  padding: '8px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                  fontFamily: 'inherit',
+                  lineHeight: 1.6
+                }}
+              />
+            ) : (
+              <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.7, padding: '6px 2px', whiteSpace: 'pre-wrap' }}>
+                {hrNote || '-'}
+              </div>
+            )}
           </div>
 
           {/* Stage buttons */}
-          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 20px' }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700, color: '#1e293b' }}>
-              Chuyển trạng thái
-            </h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {STAGES.map((stage) => {
-                const isCurrent = application.stage === stage
-                return (
-                  <button
-                    key={stage}
-                    onClick={() => !isCurrent && handleStageChange(stage)}
-                    disabled={isCurrent}
-                    style={{
-                      padding: '7px 14px',
-                      borderRadius: 7,
-                      border: isCurrent ? 'none' : '1px solid #e2e8f0',
-                      background: isCurrent ? STAGE_COLORS[stage] : '#f8fafc',
-                      color: isCurrent ? '#fff' : '#374151',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: isCurrent ? 'default' : 'pointer',
-                      opacity: isCurrent ? 1 : 0.85
-                    }}
-                  >
-                    {stage}
-                  </button>
-                )
-              })}
+          {canManage && (
+            <div style={{ background: 'var(--bg-white)', borderRadius: 12, border: '1px solid var(--border-light)', padding: '16px 20px' }}>
+              <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                Chuyển trạng thái
+              </h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {STAGES.map((stage) => {
+                  const isCurrent = application.stage === stage
+                  return (
+                    <button
+                      key={stage}
+                      onClick={() => !isCurrent && handleStageChange(stage)}
+                      disabled={isCurrent}
+                      style={{
+                        padding: '7px 14px',
+                        borderRadius: 7,
+                        border: isCurrent ? 'none' : '1px solid #e2e8f0',
+                        background: isCurrent ? STAGE_COLORS[stage] : 'var(--bg-page)',
+                        color: isCurrent ? '#fff' : 'var(--text-primary)',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: isCurrent ? 'default' : 'pointer',
+                        opacity: isCurrent ? 1 : 0.85
+                      }}
+                    >
+                      {stage}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Chat button */}
-          <button
-            onClick={() => navigate(`/hr/chat/${appId}`)}
-            style={{
-              padding: '12px',
-              background: '#1e293b',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 10,
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8
-            }}
-          >
-            💬 Chat với ứng viên
-          </button>
         </div>
       </div>
 
@@ -350,6 +393,8 @@ export const ApplicationReviewPage = () => {
           onCancel={() => setShowScheduleModal(false)}
         />
       )}
+
     </div>
+    </DashboardShell>
   )
 }

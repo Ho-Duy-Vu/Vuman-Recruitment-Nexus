@@ -2,6 +2,12 @@ import { AppError } from '../utils/AppError.js'
 import { env } from '../config/env.js'
 
 export const errorHandler = (err, req, res, next) => {
+  if (res.headersSent) {
+    // Tránh gửi JSON lỗi lần hai (ERR_HTTP_HEADERS_SENT)
+    console.error('[errorHandler] Response already sent:', err)
+    return
+  }
+
   let error = err
 
   if (!(error instanceof AppError)) {

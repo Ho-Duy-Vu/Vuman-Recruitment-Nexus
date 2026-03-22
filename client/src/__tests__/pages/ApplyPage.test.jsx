@@ -29,14 +29,17 @@ const renderApplyPage = (jobId = 'job123') => {
   )
 }
 
-// helper: fill step 0 required fields
-// text inputs: [0]=Họ(optional), [1]=Tên(optional), [2]=city(required)
-// selects:     [0]=country, [1]=gender(required)
+// helper: fill step 0 required fields (country, city, gender)
 const fillStep0 = () => {
-  const textInputs = document.querySelectorAll('input[type="text"]')
-  fireEvent.change(textInputs[2], { target: { value: 'Hà Nội' } })
-  const selects = document.querySelectorAll('select')
-  fireEvent.change(selects[1], { target: { value: 'Nam' } })
+  const cityInput = screen.getByPlaceholderText('Hồ Chí Minh')
+  fireEvent.change(cityInput, { target: { value: 'Hà Nội' } })
+
+  const selects = Array.from(document.querySelectorAll('select'))
+  const countrySelect = selects.find((s) => s.querySelector('option[value="Hoa Kỳ"]'))
+  const genderSelect = selects.find((s) => s.querySelector('option[value="Nam"]'))
+
+  if (countrySelect) fireEvent.change(countrySelect, { target: { value: 'Việt Nam' } })
+  if (genderSelect) fireEvent.change(genderSelect, { target: { value: 'Nam' } })
 }
 
 beforeEach(() => {
@@ -60,20 +63,20 @@ describe('ApplyPage — Step 1 (Thông tin của tôi)', () => {
     renderApplyPage()
     fillStep0()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu và tiếp tục' }))
-    expect(screen.getByRole('heading', { name: 'Kinh nghiệm' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Kỹ năng' })).toBeInTheDocument()
   })
 })
 
-describe('ApplyPage — Step 2 (Kinh nghiệm)', () => {
+describe('ApplyPage — Step 2 (Kỹ năng)', () => {
   const goToStep2 = () => {
     renderApplyPage()
     fillStep0()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu và tiếp tục' }))
   }
 
-  it('should show "Kinh nghiệm" heading on step 2', () => {
+  it('should show "Kỹ năng" heading on step 2', () => {
     goToStep2()
-    expect(screen.getByRole('heading', { name: 'Kinh nghiệm' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Kỹ năng' })).toBeInTheDocument()
   })
 })
 

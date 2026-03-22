@@ -1,14 +1,24 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { fetchOpenJobs } from '../../api/job.api'
 import { selectCurrentUser, selectIsAuthenticated } from '../../store/authSlice'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { SkeletonTable } from '../../components/ui/SkeletonTable'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import { useOpenJobsSocket } from '../../hooks/useOpenJobsSocket'
 
 const distinctDepartments = (jobs) => {
   const set = new Set()
   jobs.forEach((j) => { if (j.department) set.add(j.department) })
   return Array.from(set)
 }
+
+const normalizeLocationForCompare = (v) => String(v || '')
+  .toLowerCase()
+  .replace(/^tp\.?\s*/i, '')
+  .replace(/\./g, '')
+  .trim()
 
 export function JobListPage() {
   const [jobs, setJobs] = useState([])
@@ -23,12 +33,19 @@ export function JobListPage() {
   const isAuthenticated = useSelector(selectIsAuthenticated)
   const user = useSelector(selectCurrentUser)
   const showCandidateFooter = isAuthenticated && user?.role === 'candidate'
+  /** Bài A: debounce trước → ít lần lọc nặng; deferred → React ưu tiên nhập liệu mượt */
+  const debouncedKeyword = useDebouncedValue(keyword, 280)
+  const deferredKeyword = useDeferredValue(debouncedKeyword)
 
-  const normalizeLocationForCompare = (v) => String(v || '')
-    .toLowerCase()
-    .replace(/^tp\.?\s*/i, '')
-    .replace(/\./g, '')
-    .trim()
+  const reloadOpenJobs = useCallback(async () => {
+    try {
+      const data = await fetchOpenJobs()
+      setJobs(data)
+      setError(null)
+    } catch (err) {
+      setError(err.message || 'Không thể tải danh sách việc làm')
+    }
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -45,6 +62,10 @@ export function JobListPage() {
     return () => { mounted = false }
   }, [])
 
+  useOpenJobsSocket(() => {
+    void reloadOpenJobs()
+  })
+
   const departments = useMemo(() => distinctDepartments(jobs), [jobs])
 
   const filteredJobs = useMemo(() => jobs.filter((job) => {
@@ -52,18 +73,25 @@ export function JobListPage() {
     if (employmentTypeFilter && job.employmentType !== employmentTypeFilter) return false
     if (locationFilter && normalizeLocationForCompare(job.location) !== normalizeLocationForCompare(locationFilter)) return false
     if (workModeFilter && job.workMode !== workModeFilter) return false
-    if (keyword) {
-      const lower = keyword.toLowerCase()
+    if (deferredKeyword) {
+      const lower = deferredKeyword.toLowerCase()
       const inTitle = job.title?.toLowerCase().includes(lower)
       const inDept = job.department?.toLowerCase().includes(lower)
       const inSkills = (job.requiredSkills || []).some((s) => s.toLowerCase().includes(lower))
       if (!inTitle && !inDept && !inSkills) return false
     }
     return true
-  }), [jobs, departmentFilter, keyword])
+  }), [
+    jobs,
+    departmentFilter,
+    employmentTypeFilter,
+    locationFilter,
+    workModeFilter,
+    deferredKeyword
+  ])
 
   return (
-    <main className="career-layout">
+    <main className="career-layout ui-page-enter">
       {/* Hero */}
       <div className="career-hero">
         <div className="career-hero-inner">
@@ -153,15 +181,23 @@ export function JobListPage() {
           )}
 
           {loading && (
-            <div className="career-empty">Đang tải danh sách việc làm...</div>
-          )}
-          {error && !loading && (
-            <div className="career-empty" style={{ color: '#cc0000' }}>
-              Không thể tải danh sách việc làm. Vui lòng thử lại sau.
+            <div className="career-empty">
+              <SkeletonTable rowCount={6} />
             </div>
           )}
+          {error && !loading && (
+            <EmptyState
+              icon="⚠️"
+              title="Không thể tải danh sách việc làm"
+              description="Vui lòng thử lại sau."
+            />
+          )}
           {!loading && !error && filteredJobs.length === 0 && (
-            <div className="career-empty">Không tìm thấy vị trí phù hợp.</div>
+            <EmptyState
+              icon="🔎"
+              title="Không tìm thấy vị trí phù hợp"
+              description="Hãy thử điều chỉnh bộ lọc hoặc tìm kiếm theo từ khóa khác."
+            />
           )}
 
           {!loading && !error && filteredJobs.length > 0 && (
@@ -214,6 +250,12 @@ export function JobListPage() {
           </div>
         </aside>
       </section>
+
+      <p className="candidate-muted" style={{ textAlign: 'center', margin: '20px 16px 32px', fontSize: 13 }}>
+        <Link to="/demo/virtualization" style={{ color: 'var(--color-link, #0d6e56)' }}>
+          Demo hiệu năng: danh sách ảo (virtualization)
+        </Link>
+      </p>
     </main>
   )
 }

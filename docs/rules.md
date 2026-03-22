@@ -1,6 +1,19 @@
 # rules.md — Cursor AI Coding Rules
-# HRM / ATS System — MERN Stack + Gemini AI
-# Version: 1.0 | Apply to ALL files in this project
+# HRM / ATS System — MERN Stack (ATS)
+# Version: 1.1 | Apply to ALL files in this project
+
+---
+
+## 0.1 CHANGELOG — Tối ưu (đã gỡ AI / Gemini phân tích CV)
+
+**Cập nhật:** 2026-03-16 — giảm phụ thuộc, đơn giản vận hành.
+
+| Khu vực | Đã xóa / đổi |
+|--------|----------------|
+| **Backend** | `queues/ai.queue.js`, `queues/workers/ai.worker.js`, `services/ai.service.js`, `utils/promptBuilder.js`, `models/AIEvaluation.model.js`, `repositories/aiEvaluation.repository.js`, `GET /api/applications/:appId/ai-evaluation`, trường `aiStatus` + index trên Application, package `@google/generative-ai`, biến `GEMINI_API_KEY` |
+| **Queue / admin** | Bull Board (`/admin/queues`) chỉ còn hàng đợi email — `queues/bullBoard.js` + `email.queue.js` |
+| **Frontend** | `AIScoreCard.jsx` + test; bỏ fetch AI trên trang review; Kanban: bỏ badge điểm/trạng thái AI, sort theo `appliedAt` / tên; bỏ socket `application:evaluation_ready` |
+| **Test** | `ai.service.test.js`, `AIScoreCard.test.jsx`; mock `bullBoard.js` thay cho `ai.queue` / `ai.worker` trong API tests |
 
 ---
 
@@ -18,8 +31,7 @@ When in doubt: simpler, more explicit, more secure.
 Backend  : Node.js 20 + Express 5 + Mongoose 8
 Frontend : React 18 + Vite + Redux Toolkit + React Router v6
 Realtime : Socket.io 4
-Queue    : BullMQ + Redis (ioredis)
-AI       : Google Gemini API (@google/generative-ai)
+Queue    : BullMQ + Redis (ioredis) — email notifications (demo)
 Email    : Nodemailer (SMTP)
 Storage  : Local disk + Nginx (demo)
 Database : MongoDB Atlas (or local)
@@ -104,8 +116,9 @@ auth.service.js         → Business logic
 auth.controller.js      → HTTP handler
 auth.routes.js          → Route declarations
 authenticate.js         → Middleware (no suffix needed)
-ai.queue.js             → Queue definition
-ai.worker.js            → BullMQ worker processor
+email.queue.js          → BullMQ email queue definition
+bullBoard.js            → Bull Board UI router (admin)
+email.worker.js         → BullMQ email worker (chạy riêng nếu bật)
 auth.validator.js       → Joi schemas
 useSocket.js            → React hook (camelCase, use prefix)
 authSlice.js            → Redux slice
@@ -137,7 +150,7 @@ function CandidateCard() {}
 
 ### MongoDB Collections (plural, camelCase)
 ```
-users, jobs, applications, aiEvaluations,
+users, jobs, applications,
 messages, interviewSchedules, emailLogs, fileMetadata
 ```
 
@@ -290,7 +303,6 @@ HR_JWT_SECRET=         # min 32 chars random string
 CAND_JWT_SECRET=       # different from HR_JWT_SECRET
 REFRESH_JWT_SECRET=    # different from both above
 REDIS_URL=
-GEMINI_API_KEY=
 SMTP_HOST=
 SMTP_PORT=
 SMTP_USER=
@@ -383,11 +395,6 @@ async findById(id) {
 }
 ```
 
-### Application aiStatus — valid values only
-```
-pending | processing | done | ai_failed | manual_review | skipped
-```
-
 ### Application stage — valid values only
 ```
 New | Screening | Interview | Offer | Hired | Rejected
@@ -398,27 +405,14 @@ New | Screening | Interview | Offer | Hired | Rejected
 ## 8. QUEUE RULES (BullMQ)
 
 ```javascript
-// ai.queue.js
-const aiQueue = new Queue('ai_screening', { connection })
-const aiWorker = new Worker('ai_screening', aiProcessor, {
-  connection,
-  limiter: { max: 10, duration: 60_000 },  // Gemini free tier
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: { type: 'exponential', delay: 2000 }
-  }
-})
-
-// Worker MUST update aiStatus at each lifecycle point
-// pending → processing (worker starts)
-// processing → done (Gemini success)
-// processing → ai_failed (all retries exhausted)
-
-// CV parse check BEFORE calling Gemini
-if (extractedText.length < 100) {
-  await applicationRepo.updateAiStatus(appId, 'manual_review')
-  return  // Do not call Gemini
+// email.queue.js — hàng đợi thông báo email (demo / production tùy cấu hình)
+export const emailQueue = new Queue('email_notifications', { connection })
+export const addEmailJob = async (payload) => {
+  await emailQueue.add('notify', payload, { attempts: 2, backoff: { type: 'exponential', delay: 3000 } })
 }
+
+// bullBoard.js — chỉ mount adapter cho emailQueue (admin /admin/queues)
+// Worker xử lý email: queues/workers/email.worker.js — import/start khi cần (không bắt buộc trong app HTTP)
 ```
 
 ---
@@ -427,7 +421,7 @@ if (extractedText.length < 100) {
 
 ### Event names — namespace:action format
 ```
-application:new            → AI done, push to HR board
+application:new            → Ứng viên mới nộp đơn (HR board reload)
 application:viewing        → HR opened a CV
 application:stage_changed  → Card moved in Kanban
 chat:message               → New chat message
@@ -521,7 +515,7 @@ const { page = 1, limit = 20 } = req.query
 
 ```javascript
 // Always handle promise rejections in workers
-aiWorker.on('failed', (job, err) => {
+emailWorker.on('failed', (job, err) => {
   console.error(`Job ${job.id} failed:`, err.message)
 })
 ```
@@ -536,7 +530,6 @@ aiWorker.on('failed', (job, err) => {
 ✗ Never store JWT in localStorage or sessionStorage
 ✗ Never put PII (email, name, phone) in JWT payload
 ✗ Never serve /uploads/ as Nginx static directory
-✗ Never call Gemini API directly from a controller (always via queue)
 ✗ Never change application.stage outside of StageChangeService
 ✗ Never create a second socket connection in any component
 ✗ Never commit .env file
@@ -690,6 +683,24 @@ Token claim: mustChangePassword included in HR access token payload
 ```
 
 ---
+### Session Management (Demo Model)
+```
+Active session model: lưu nhiều phiên refresh trong collection `RefreshSession`.
+- Mỗi session có `refreshTokenHash`, `createdAt`, `lastUsedAt`, `userAgent`, `ip`.
+- Login/refresh sẽ tạo/rotate refresh token trong session tương ứng.
+- Logout: POST `/api/auth/logout` → revoke toàn bộ active sessions của user.
+- Forgot/Reset/Change password: cũng revoke toàn bộ active sessions để buộc đăng nhập lại.
+
+Remote logout + UI hiển thị danh sách session active: ĐÃ implement.
+- Backend:
+  - `GET /api/auth/sessions` — liệt kê session active của user
+  - `DELETE /api/auth/sessions/:sessionId` — logout từ xa theo session
+  - `DELETE /api/auth/sessions` — logout từ xa tất cả phiên
+- Frontend:
+  - Trang `client/src/pages/SessionManagementPage.jsx` + route `/sessions`
+```
+
+---
 
 ## 17. UI LANGUAGE — VIETNAMESE REQUIRED
 
@@ -779,37 +790,41 @@ Exception: technical field names used internally (e.g. "ID", "email" format)
            and proper nouns (e.g. "LinkedIn", "Facebook")
 ```
 
+---
+
+### 17.1 UI/UX POLISH — Loading/Skeleton/Error/Empty/Dark/Animations
+- Loading states: hiển thị spinner khi action đang chạy (ví dụ: nút “Đang nộp...”).
+- Skeleton screens: dùng `SkeletonText`, `SkeletonCard`, `SkeletonTable` thay cho “Đang tải...” thuần text ở các khu vực danh sách.
+- Error boundaries: luôn bọc ở cấp App bằng `ErrorBoundary` để tránh trắng màn hình; fallback có nút “Tải lại”.
+- Empty states: thống nhất qua `EmptyState` (icon + title + description) thay cho các message rời rạc.
+- Dark mode: dùng CSS variables + `html[data-theme="dark"]`; toggle lưu “theme preference” trong `localStorage` (chỉ theme, không lưu JWT).
+- Animations: dùng `ui-page-enter` và skeleton shimmer; bắt buộc tôn trọng `prefers-reduced-motion: reduce`.
+
+---
+
+### 17.2 UI LANGUAGE — Multi-language (VI/EN) for Account UI
+- Default language: `vi`.
+- Nghiệp vụ đặc biệt: cho phép hiển thị `en` khi user chọn `EN` trên menu (Navbar) và trong phần header (theme/language toggle, menu dropdown).
+- Nội dung các trang account (`/profile`, `/settings`, `/help`) giữ nguyên tiếng Việt, không thay đổi theo ngôn ngữ đã chọn.
+
 ### LESSON 12 — Stub pattern for unimplemented dependencies
 
 When a feature depends on a future task (e.g. BullMQ not yet setup),
 use stub with clear TODO comment — never leave silent failures.
 
 ```javascript
-// CORRECT stub pattern
+// CORRECT — enqueue email (hoặc log rõ ràng trong demo)
 async function submitApplication(...) {
   // ... save CV, create application ...
-
-  // TODO: Task 15 — replace with real BullMQ enqueue
-  console.log('[AI Queue] Queued for applicationId:', application._id)
-  // aiStatus stays 'pending' until worker picks it up
-
-  // TODO: Task 23 — replace with real email queue
-  await emailService.sendApplyConfirm({ to, jobTitle })
-  // emailService uses console.log in demo mode
+  await addEmailJob({ type: 'apply_confirm', applicationId: String(application._id) })
 }
 
-// WRONG — silent skip with no indication
-async function submitApplication(...) {
-  // ... save CV, create application ...
-  // (AI queue just... not called, no comment)
-}
+// WRONG — silent skip với tính năng đã kỳ vọng (mail / socket) mà không log
 ```
 
-Stub rules:
-- Always log with prefix: [AI Queue], [Email Queue], [Socket], etc.
-- Always add: // TODO: Task XX — replace with real implementation
-- aiStatus must still be set correctly (pending/manual_review/skipped)
-  so the UI shows correct state even before worker exists
+Stub / demo rules:
+- Luôn log hoặc queue có prefix rõ: `[Email Queue]`, `[Socket]`, v.v.
+- TODO có mã task / mô tả ngắn nếu phần còn thiếu
 
 ### LESSON 13 — Application duplicate: catch code 11000, not AppError
 
@@ -866,43 +881,11 @@ app.use('/api', routes)
 Always verify final mounted path = app.use prefix + router.use prefix + route path.
 When adding a new router: trace the full path before testing.
 
-### LESSON 16 — Gemini model string: use exact API model name
+### LESSON 16 — Bull Board tách file, mock trong Jest
 
-```javascript
-// CORRECT — exact API string
-const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-
-// WRONG — marketing name, not valid API string
-const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-// → 404 model not found from Gemini API
-
-// Current model used in this project: gemini-2.0-flash
-// If upgrading: verify exact string at aistudio.google.com/models
-```
-
-### LESSON 17 — BullBoard must be side-effect imported to register queues
-
-```javascript
-// In app.js — import worker for side effect (registers the queue processor)
-import './src/queues/workers/ai.worker.js'
-
-// Without this import: queue jobs are added but never processed
-// Worker only runs if the module is imported somewhere in the app
-```
-
-### LESSON 18 — Gemini response may contain markdown fences — always strip
-
-```javascript
-// Gemini sometimes wraps JSON in ```json ... ``` even when told not to
-// Always strip before JSON.parse:
-const cleaned = text
-  .replace(/```json/gi, '')
-  .replace(/```/g, '')
-  .trim()
-const parsed = JSON.parse(cleaned)
-
-// Never do: const parsed = JSON.parse(text) — will throw SyntaxError
-```
+- UI Bull Board nằm ở `server/src/queues/bullBoard.js` (import `emailQueue` từ `email.queue.js`).
+- Trong test API: `jest.mock('../../queues/bullBoard.js', () => ({ bullBoardRouter: (req, res, next) => next() }))` để không cần Redis thật khi import `app.js`.
+- Worker xử lý job (email) chạy process riêng hoặc import có chủ đích — không trộn vào HTTP app nếu không cần.
 
 ---
 
@@ -924,12 +907,11 @@ const parsed = JSON.parse(cleaned)
 ```
 ✅ POST /api/applications      — Candidate only, submit CV + form
    → saves CV to disk, extracts text, creates Application
-   → aiStatus: 'pending' (stub queue until Task 15)
-   → email confirm: console.log (stub until Task 23)
+   → email confirm qua queue `email_notifications` (demo có thể log)
    → duplicate → 409 "Bạn đã ứng tuyển vị trí này rồi"
    → invalid file → 400 "Loại file không hợp lệ"
    → file too large → 400 "File quá lớn (tối đa 5MB)"
-   → CV text < 100 chars → aiStatus: 'manual_review'
+   → response có `cvTooShort: true` khi CV quá ngắn (không còn pipeline AI)
 ```
 
 ### Frontend routes (tiếng Việt UI)
@@ -945,39 +927,21 @@ const parsed = JSON.parse(cleaned)
 'Mới' | 'Đang xét duyệt' | 'Phỏng vấn' | 'Đề xuất' | 'Đã tuyển' | 'Không phù hợp'
 ```
 
-### Application aiStatus enum
-```
-'pending' | 'processing' | 'done' | 'ai_failed' | 'manual_review' | 'skipped'
-```
-
-### AI + File — Sprint 3 COMPLETE (Task 14–18)
+### File + Kanban + Review — (không còn AI)
 ```
 ✅ GET  /api/applications/:appId/cv-url  — HR any / Candidate own → signed URL (15min)
 ✅ GET  /api/files/serve?path&sig&exp    — verify signature → stream file
-✅ BullMQ ai_screening queue             — addAIJob(applicationId)
-✅ AI Worker (gemini-2.0-flash)          — 10 req/min, retry x3 exponential
-✅ AIEvaluation collection               — matchingScore, skills, summary (tiếng Việt)
-✅ /admin/queues                         — BullBoard (admin only)
+✅ /admin/queues                         — BullBoard — chỉ queue email (admin only)
 ✅ PATCH /api/applications/:appId/stage  — stageChange.service.js ONLY
 ✅ PATCH /api/applications/:appId/note   — HR note auto-save
 ✅ GET   /api/applications?jobId=        — list for Kanban
 ✅ models/InterviewSchedule.model.js     — created on stage → Phỏng vấn
-✅ Kanban board                          — 5 columns, DnD, AI score sort, Vietnamese
+✅ Kanban board                          — cột theo stage, DnD, sort theo ngày nộp + tên
 ✅ ScheduleModal                         — required before moving to Phỏng vấn
-✅ Split-view review                     — CV iframe + AIScoreCard + HR note
-
-aiStatus flow:
-  pending → processing → done          (happy path)
-  pending → processing → manual_review (cvText < 100 chars)
-  pending → processing → ai_failed     (all retries exhausted)
+✅ Split-view review                     — CV iframe + thông tin form + ghi chú HR (không AIScoreCard)
 
 Stage enum (Vietnamese):
   Mới | Đang xét duyệt | Phỏng vấn | Đề xuất | Đã tuyển | Không phù hợp
-
-Stubs remaining (to be replaced in Sprint 4):
-  [Socket] application:stage_changed  → Task 20
-  [Socket] application:new            → Task 21
-  [Email Queue] stage trigger         → Task 23
 ```
 
 ### LESSON 19 — stageChange.service.js is the ONLY file that calls updateStage
@@ -988,7 +952,7 @@ await stageChangeService.changeStage(appId, 'Phỏng vấn', hrId, scheduleData)
 
 // WRONG — bypassing the service
 await applicationRepo.updateStage(appId, 'Phỏng vấn') // ← direct call FORBIDDEN
-// Consequence: email, socket, discrepancy logic all silently skipped
+// Consequence: email, socket side effects all silently skipped
 ```
 
 If ANY file other than stageChange.service.js calls applicationRepo.updateStage()
@@ -1085,23 +1049,13 @@ afterAll(async () => {
 
 ```javascript
 // Mock external services — never call real APIs in tests
-jest.mock('../../services/ai.service.js')
-jest.mock('../../queues/ai.queue.js')
+jest.mock('../../queues/bullBoard.js', () => ({
+  bullBoardRouter: (req, res, next) => next()
+}))
 jest.mock('../../services/email.service.js')
 
 // Mock fs for file service tests
 jest.mock('fs/promises')
-
-// Mock Gemini
-jest.mock('@google/generative-ai', () => ({
-  GoogleGenerativeAI: jest.fn().mockImplementation(() => ({
-    getGenerativeModel: jest.fn().mockReturnValue({
-      generateContent: jest.fn().mockResolvedValue({
-        response: { text: () => '{"matchingScore":85,"matchedSkills":["React"],"missingSkills":[],"summary":"Tốt"}' }
-      })
-    })
-  }))
-}))
 ```
 
 ### Test naming convention
@@ -1149,15 +1103,13 @@ babel.config.cjs with: module.exports = { ... }
 ### LESSON 23 — Never call real external APIs in unit tests
 
 ```javascript
-// WRONG — slow, flaky, costs money, fails offline
-it('should screen CV', async () => {
-  const result = await aiService.screenCV(cvText, ...)
-  // This calls real Gemini API ← NEVER
+// WRONG — gọi SMTP / payment / LLM thật trong unit test
+it('should send email', async () => {
+  await realSmtpTransport.sendMail(...) // ← NEVER
 })
 
-// CORRECT — mock the API client
-jest.mock('@google/generative-ai')
-// Test only your parsing + validation logic
+// CORRECT — mock transport / service layer
+jest.mock('nodemailer')
 ```
 
 ### LESSON 24 — Clear DB between tests, not between suites

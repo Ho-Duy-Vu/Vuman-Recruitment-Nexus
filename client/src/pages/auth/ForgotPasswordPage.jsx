@@ -41,7 +41,7 @@ export function ForgotPasswordPage() {
             {error && <p className="error-text login-error">{error}</p>}
 
             <label className="login-field">
-              Địa chỉ email <span className="required">*</span>
+              Địa chỉ email <span className="required"></span>
               <input
                 type="email"
                 value={email}
@@ -62,6 +62,15 @@ export function ForgotPasswordPage() {
                 Demo mode: Đây là <b>resetToken</b> (dùng cho API `reset-password`):
               </p>
               <div className="forgot-token">{resetToken}</div>
+
+              <div style={{ marginTop: 14 }}>
+                <Link
+                  to={`/reset-password?token=${encodeURIComponent(resetToken)}`}
+                  className="login-link"
+                >
+                  Bấm để đặt lại mật khẩu
+                </Link>
+              </div>
             </div>
           )}
 

@@ -5,10 +5,10 @@ const overlay = {
   display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
 }
 const modal = {
-  background: '#fff', borderRadius: 12, padding: '28px 32px',
+  background: 'var(--bg-white)', borderRadius: 12, padding: '28px 32px',
   width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.2)'
 }
-const label = { display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 4 }
+const label = { display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }
 const input = {
   width: '100%', padding: '8px 12px', border: '1px solid #d1d5db',
   borderRadius: 6, fontSize: 14, boxSizing: 'border-box'
@@ -18,7 +18,7 @@ const btnPrimary = {
   padding: '9px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer'
 }
 const btnSecondary = {
-  background: '#f1f5f9', color: '#374151', border: '1px solid #d1d5db',
+  background: 'var(--bg-page)', color: 'var(--text-primary)', border: '1px solid var(--border-light)',
   borderRadius: 6, padding: '9px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer'
 }
 

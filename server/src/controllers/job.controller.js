@@ -9,6 +9,16 @@ import {
   updateJob
 } from '../services/job.service.js'
 import { sendSuccess } from '../utils/apiResponse.js'
+import { getIO } from '../socket/socket.js'
+
+function emitOpenJobsRefresh() {
+  try {
+    const io = getIO()
+    if (io) io.to('public:jobs').emit('open_jobs:refresh')
+  } catch {
+    /* ignore */
+  }
+}
 
 export const getOpenJobsController = async (req, res, next) => {
   try {
@@ -43,7 +53,6 @@ export const createJobController = async (req, res, next) => {
   try {
     const hrId = req.user.id
     const job = await createJob(hrId, req.body)
-    res.status(201)
     sendSuccess(res, { job }, 201)
   } catch (error) {
     next(error)
@@ -66,6 +75,7 @@ export const publishJobController = async (req, res, next) => {
     const { id } = req.params
     const hrId = req.user.id
     const job = await publishJob(id, hrId)
+    emitOpenJobsRefresh()
     sendSuccess(res, { job })
   } catch (error) {
     next(error)
@@ -77,6 +87,7 @@ export const closeJobController = async (req, res, next) => {
     const { id } = req.params
     const hrId = req.user.id
     const job = await closeJob(id, hrId)
+    emitOpenJobsRefresh()
     sendSuccess(res, { job })
   } catch (error) {
     next(error)

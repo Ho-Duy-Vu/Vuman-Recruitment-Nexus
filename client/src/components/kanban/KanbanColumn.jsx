@@ -10,8 +10,21 @@ const COLUMN_COLORS = {
   'Không phù hợp': '#ef4444'
 }
 
-export const KanbanColumn = ({ stage, applications }) => {
+export const KanbanColumn = ({
+  stage,
+  applications,
+  totalCount,
+  hasMore,
+  onLoadMore,
+  viewingByApp = {},
+  onBeforeOpenCard,
+  bulkMode = false,
+  selectedIds,
+  onToggleSelect,
+  jobExpired = false
+}) => {
   const color = COLUMN_COLORS[stage] || '#94a3b8'
+  const count = totalCount ?? applications.length
 
   return (
     <div style={{
@@ -22,7 +35,7 @@ export const KanbanColumn = ({ stage, applications }) => {
       background: 'var(--bg-white)',
       borderRadius: 'var(--radius-lg)',
       border: '1px solid var(--border-card)',
-      overflow: 'hidden'
+      overflow: 'visible'
     }}>
       {/* Column header */}
       <div style={{
@@ -31,7 +44,7 @@ export const KanbanColumn = ({ stage, applications }) => {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        background: '#fafafa'
+        background: 'var(--bg-page)'
       }}>
         <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>{stage}</span>
         <span style={{
@@ -42,7 +55,7 @@ export const KanbanColumn = ({ stage, applications }) => {
           fontSize: 12,
           fontWeight: 700
         }}>
-          {applications.length}
+          {count}
         </span>
       </div>
 
@@ -56,6 +69,8 @@ export const KanbanColumn = ({ stage, applications }) => {
               padding: 10,
               minHeight: 200,
               flex: 1,
+              /* Không overflow riêng — scroll do .kanban-board-viewport (một scroll parent cho dnd) */
+              overflow: 'visible',
               background: snapshot.isDraggingOver ? `${color}18` : 'transparent',
               transition: 'background 0.2s'
             }}
@@ -72,13 +87,36 @@ export const KanbanColumn = ({ stage, applications }) => {
               </div>
             ) : (
               applications.map((app, idx) => (
-                <CandidateCard key={String(app._id)} application={app} index={idx} />
+                <CandidateCard
+                  key={String(app._id)}
+                  application={app}
+                  index={idx}
+                  viewedBy={viewingByApp[String(app._id)]}
+                  onBeforeOpen={onBeforeOpenCard}
+                  bulkMode={bulkMode}
+                  selected={selectedIds?.has(String(app._id))}
+                  onToggleSelect={onToggleSelect}
+                  jobExpired={jobExpired}
+                />
               ))
             )}
             {provided.placeholder}
           </div>
         )}
       </Droppable>
+
+      {hasMore && (
+        <div style={{ padding: '10px 12px', borderTop: '1px solid var(--border-card)', background: 'var(--bg-white)' }}>
+          <button
+            type="button"
+            onClick={onLoadMore}
+            className="btn btn-secondary"
+            style={{ width: '100%', padding: '8px 10px' }}
+          >
+            Xem thêm ({count - applications.length})
+          </button>
+        </div>
+      )}
     </div>
   )
 }

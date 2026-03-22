@@ -1,10 +1,11 @@
-import { submitApplication } from '../services/application.service.js'
+import { submitApplication, bulkRejectApplications } from '../services/application.service.js'
 import { changeStage } from '../services/stageChange.service.js'
 import { applicationRepository } from '../repositories/application.repository.js'
-import { aiEvaluationRepository } from '../repositories/aiEvaluation.repository.js'
 import { fileMetadataRepository } from '../repositories/fileMetadata.repository.js'
+import { InterviewSchedule } from '../models/InterviewSchedule.model.js'
 import { sendSuccess } from '../utils/apiResponse.js'
 import { AppError } from '../utils/AppError.js'
+import { notifyCandidateApplication } from '../socket/candidateNotify.js'
 
 export const submitApplicationController = async (req, res, next) => {
   try {
@@ -13,14 +14,70 @@ export const submitApplicationController = async (req, res, next) => {
     }
 
     const candidateId = req.user.id
-    const { jobId, country, city, gender, source, messageToHR } = req.body
+    const {
+      jobId,
+      country,
+      city,
+      gender,
+      source,
+      messageToHR,
+      fullName,
+      skills,
+      awardsAndCertifications,
+      companies,
+      university,
+      degreeLevel,
+      graduationYear,
+      portfolioUrl,
+      linkedinUrl,
+      phoneNumber,
+      homeAddress,
+      postalCode,
+      cvConsent,
+      workedAtThisCompany
+    } = req.body
+
+    // Multipart form sends `companies` as string or as repeated keys; normalize into string[]
+    let normalizedCompanies = []
+    if (Array.isArray(companies)) {
+      normalizedCompanies = companies.map((c) => String(c || '').trim()).filter(Boolean)
+    } else if (typeof companies === 'string') {
+      const raw = companies.trim()
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed)) {
+            normalizedCompanies = parsed.map((c) => String(c || '').trim()).filter(Boolean)
+          } else {
+            normalizedCompanies = [raw]
+          }
+        } catch {
+          // fallback: treat as a single company name
+          normalizedCompanies = [raw]
+        }
+      }
+    }
 
     const formData = {
       country,
       city,
       gender,
       source,
-      messageToHR: messageToHR || ''
+      messageToHR: messageToHR || '',
+      fullName: fullName || '',
+      skills: skills || '',
+      awardsAndCertifications: awardsAndCertifications || '',
+      companies: normalizedCompanies,
+      university: university || '',
+      degreeLevel: degreeLevel || '',
+      graduationYear: graduationYear || '',
+      portfolioUrl: portfolioUrl || '',
+      linkedinUrl: linkedinUrl || '',
+      phoneNumber: phoneNumber || '',
+      homeAddress: homeAddress || '',
+      postalCode: postalCode || '',
+      cvConsent: cvConsent || '',
+      workedAtThisCompany: workedAtThisCompany || ''
     }
 
     const { application, tooShort } = await submitApplication(
@@ -32,7 +89,6 @@ export const submitApplicationController = async (req, res, next) => {
       req.file.detectedMimeType
     )
 
-    res.status(201)
     sendSuccess(res, { application, cvTooShort: tooShort }, 201)
   } catch (error) {
     next(error)
@@ -104,6 +160,39 @@ export const getAllApplicationsForHRController = async (req, res, next) => {
   }
 }
 
+export const bulkRejectApplicationsController = async (req, res, next) => {
+  try {
+    const { jobId, applicationIds } = req.body
+    const summary = await bulkRejectApplications({ jobId, applicationIds }, req.user.id)
+    sendSuccess(res, { summary })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const getInterviewForApplicationController = async (req, res, next) => {
+  try {
+    const { appId } = req.params
+    const application = await applicationRepository.findById(appId)
+    if (!application) {
+      throw new AppError('Không tìm thấy hồ sơ', 404)
+    }
+
+    if (req.user.role === 'candidate') {
+      if (String(application.candidateId) !== String(req.user.id)) {
+        throw new AppError('Bạn không có quyền xem lịch này', 403)
+      }
+    }
+
+    const schedules = await InterviewSchedule.find({ applicationId: appId })
+      .sort({ datetime: -1 })
+      .lean()
+    sendSuccess(res, { schedules })
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const getApplicationByIdController = async (req, res, next) => {
   try {
     const { appId } = req.params
@@ -118,25 +207,6 @@ export const getApplicationByIdController = async (req, res, next) => {
     }
 
     sendSuccess(res, { application })
-  } catch (error) {
-    next(error)
-  }
-}
-
-export const getAIEvaluationController = async (req, res, next) => {
-  try {
-    const { appId } = req.params
-
-    // HR/Admin can see all evaluations; Candidate only sees own application.
-    if (req.user.role === 'candidate') {
-      const application = await applicationRepository.findById(appId)
-      if (String(application.candidateId) !== String(req.user.id)) {
-        throw new AppError('Bạn không có quyền truy cập đánh giá này', 403)
-      }
-    }
-
-    const evaluation = await aiEvaluationRepository.findByApplication(appId)
-    sendSuccess(res, { evaluation })
   } catch (error) {
     next(error)
   }

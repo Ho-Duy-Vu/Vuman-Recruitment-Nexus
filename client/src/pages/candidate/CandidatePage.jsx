@@ -1,10 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { fetchCvUrl, fetchMyApplications, withdrawApplication } from '../../api/application.api'
+import { fetchMyApplications, withdrawApplication } from '../../api/application.api'
 import { fetchMyCandidateTasks, uploadTaskDocument } from '../../api/candidateTask.api'
 import { fetchOpenJobs } from '../../api/job.api'
 import { selectCurrentUser, selectIsAuthenticated } from '../../store/authSlice'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { SkeletonCard } from '../../components/ui/SkeletonCard'
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
+import { StageTimeline } from '../../components/candidate/StageTimeline'
+import { useOpenJobsSocket } from '../../hooks/useOpenJobsSocket'
+import { useCandidateTasksSocket } from '../../hooks/useCandidateTaskSocket'
 
 const employmentTypeLabel = (v) => {
   if (v === 'full_time') return 'Full time'
@@ -17,6 +23,16 @@ const workModeLabel = (v) => {
   if (v === 'hybrid') return 'Hybrid'
   if (v === 'remote') return 'Remote'
   return v || '-'
+}
+
+const taskStatusLabel = (status) => {
+  if (status === 'pending') return 'Chờ xử lý'
+  if (status === 'in_progress') return 'Đang làm'
+  if (status === 'submitted') return 'Đã nộp'
+  if (status === 'approved') return 'Đã duyệt'
+  if (status === 'rejected') return 'Từ chối'
+  if (status === 'completed') return 'Hoàn thành'
+  return status || '—'
 }
 
 export function CandidatePage() {
@@ -36,6 +52,8 @@ export function CandidatePage() {
   const [tasksError, setTasksError] = useState(null)
   const [tasks, setTasks] = useState([])
   const [uploadingTaskId, setUploadingTaskId] = useState(null)
+  /** Chỉ mở một task — gọn khi có nhiều nhiệm vụ */
+  const [expandedTaskId, setExpandedTaskId] = useState(null)
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -92,6 +110,16 @@ export function CandidatePage() {
     return () => { mounted = false }
   }, [isAuthenticated, user?.id, user?.role])
 
+  const reloadSuggestedOpenJobs = useCallback(async () => {
+    try {
+      const jobs = await fetchOpenJobs()
+      setOpenJobs(jobs || [])
+      setSuggestedError(null)
+    } catch {
+      setSuggestedError('Không thể tải danh sách công việc đang tuyển.')
+    }
+  }, [])
+
   useEffect(() => {
     let mounted = true
     ;(async () => {
@@ -109,6 +137,22 @@ export function CandidatePage() {
     return () => { mounted = false }
   }, [])
 
+  useOpenJobsSocket(() => {
+    void reloadSuggestedOpenJobs()
+  })
+
+  const reloadMyTasks = useCallback(async () => {
+    if (user?.role !== 'candidate') return
+    try {
+      const data = await fetchMyCandidateTasks()
+      setTasks(data?.items || [])
+    } catch {
+      /* ignore */
+    }
+  }, [user?.role])
+
+  useCandidateTasksSocket(reloadMyTasks)
+
   const appliedJobIds = useMemo(() => {
     return new Set(
       applications.map((a) => String(a.jobId?._id || a.jobId || ''))
@@ -123,13 +167,8 @@ export function CandidatePage() {
     return list
   }, [openJobs, appliedJobIds])
 
-  const handleViewCv = async (appId) => {
-    try {
-      const { url } = await fetchCvUrl(appId)
-      window.open(url, '_blank', 'noopener,noreferrer')
-    } catch {
-      setError('Không thể tải CV. Vui lòng thử lại sau.')
-    }
+  const handleViewApplication = (appId) => {
+    navigate(`/candidate/applications/${appId}/review`)
   }
 
   const handleWithdraw = async (appId, jobTitle) => {
@@ -145,6 +184,9 @@ export function CandidatePage() {
       // Reload candidate applications
       const data = await fetchMyApplications()
       setApplications(data)
+      // Đồng bộ lại tasks vì backend sẽ xóa tasks gắn với application đã rút
+      const taskData = await fetchMyCandidateTasks()
+      setTasks(taskData?.items || [])
     } catch (e) {
       setError(e?.response?.data?.message || 'Không thể rút đơn ứng tuyển. Vui lòng thử lại sau.')
     } finally {
@@ -176,7 +218,7 @@ export function CandidatePage() {
   }
 
   return (
-    <main className="candidate-layout">
+    <main className="candidate-layout ui-page-enter">
       <header className="candidate-header">
         <h1 className="apply-title">Trang ứng viên</h1>
         <p className="apply-section-description">
@@ -192,107 +234,142 @@ export function CandidatePage() {
           </div>
 
           <section className="candidate-card candidate-tasks-card">
-            <h2 className="candidate-section-title" style={{ marginBottom: 10 }}>Nhiệm vụ của tôi</h2>
-            {tasksLoading && <p className="candidate-muted">Đang tải nhiệm vụ...</p>}
+            <div className="candidate-tasks-card-head">
+              <h2 className="candidate-section-title" style={{ marginBottom: 0 }}>
+                Nhiệm vụ của tôi
+                {!tasksLoading && tasks.length > 0 ? (
+                  <span className="candidate-tasks-count"> ({tasks.length})</span>
+                ) : null}
+              </h2>
+              {!tasksLoading && tasks.length > 3 ? (
+                <span className="candidate-tasks-hint">Bấm dòng để mở chi tiết &amp; nộp file</span>
+              ) : null}
+            </div>
+            {tasksLoading && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <SkeletonCard rows={1} />
+                <SkeletonCard rows={1} />
+                <SkeletonCard rows={1} />
+              </div>
+            )}
             {tasksError && <p className="error-text">{tasksError}</p>}
 
             {!tasksLoading && !tasksError && tasks.length === 0 && (
-              <div className="candidate-empty-box">
-                <div className="candidate-empty-emoji" aria-hidden="true">📭</div>
-                <div className="candidate-empty-text">Bạn chưa có nhiệm vụ nào.</div>
-              </div>
+              <EmptyState
+                icon="📭"
+                title="Bạn chưa có nhiệm vụ nào."
+                description="Khi HR tạo task cho bạn, hệ thống sẽ hiển thị tại đây."
+              />
             )}
 
             {!tasksLoading && !tasksError && tasks.length > 0 && (
-              <div className="candidate-tasks-list">
-                {tasks.map((t) => (
-                  <div key={t._id} className="candidate-task-item">
-                    <div className="candidate-task-top">
-                      <div className="candidate-task-title">{t.title}</div>
-                      <div className={`candidate-task-status candidate-task-status--${t.status}`}>
-                        {t.status === 'pending'
-                          ? 'Chờ xử lý'
-                          : t.status === 'in_progress'
-                            ? 'Đang thực hiện'
-                            : t.status === 'submitted'
-                              ? 'Đã nộp'
-                              : t.status}
-                      </div>
-                    </div>
-
-                    {t.dueDate ? (
-                      <div className="candidate-task-sub">
-                        Hạn: {new Date(t.dueDate).toLocaleDateString('vi-VN')}
-                      </div>
-                    ) : (
-                      <div className="candidate-task-sub">Hạn: -</div>
-                    )}
-
-                    {t.description ? <div className="candidate-task-desc">{t.description}</div> : null}
-
-                    <div className="candidate-task-doc-section">
-                      <div className="candidate-task-doc-title">Giấy tờ</div>
-
-                      {Array.isArray(t.documents) && t.documents.length > 0 ? (
-                        <div className="candidate-doc-list">
-                          {t.documents.map((d) => (
-                            <a
-                              key={d._id || d.storedPath}
-                              href={d.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="candidate-doc-item"
-                            >
-                              {docTypeLabel(d.docType)}: {d.originalName}
-                            </a>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="candidate-muted">Chưa có tài liệu nào.</div>
-                      )}
-
-                      <form
-                        className="candidate-task-upload"
-                        onSubmit={async (e) => {
-                          e.preventDefault()
-                          const form = e.currentTarget
-                          const docType = form.querySelector('select[name="docType"]')?.value || 'other'
-                          const fileInput = form.querySelector('input[type="file"][name="file"]')
-                          const file = fileInput?.files?.[0]
-                          await handleUploadTaskDoc(t._id, docType, file)
-                          form.reset()
-                        }}
+              <div className="candidate-tasks-scroll">
+                <div className="candidate-tasks-list candidate-tasks-list--compact">
+                  {tasks.map((t) => {
+                    const tid = String(t._id)
+                    const isOpen = expandedTaskId === tid
+                    const docCount = Array.isArray(t.documents) ? t.documents.length : 0
+                    return (
+                      <div
+                        key={tid}
+                        className={`candidate-task-item ${isOpen ? 'candidate-task-item--open' : ''}`}
                       >
-                        <select
-                          name="docType"
-                          className="career-filter"
-                          style={{ height: 34, background: '#fff', color: '#1c1c1c' }}
-                          defaultValue="certificate"
-                        >
-                          <option value="certificate">Chứng chỉ</option>
-                          <option value="personal_profile">Hồ sơ cá nhân</option>
-                          <option value="degree">Bằng cấp</option>
-                          <option value="other">Tài liệu khác</option>
-                        </select>
-                        <input
-                          type="file"
-                          name="file"
-                          accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                          className="career-search-input"
-                          style={{ height: 34, padding: '6px 12px' }}
-                        />
                         <button
-                          type="submit"
-                          className="btn btn-primary"
-                          style={{ height: 34, padding: '0 14px' }}
-                          disabled={uploadingTaskId === t._id}
+                          type="button"
+                          className="candidate-task-summary"
+                          onClick={() => setExpandedTaskId((prev) => (prev === tid ? null : tid))}
+                          aria-expanded={isOpen}
                         >
-                          {uploadingTaskId === t._id ? 'Đang tải...' : 'Gửi tài liệu'}
+                          <span className="candidate-task-chevron" aria-hidden>
+                            {isOpen ? '▼' : '▶'}
+                          </span>
+                          <div className="candidate-task-summary-text">
+                            <span className="candidate-task-title candidate-task-title--truncate" title={t.title}>
+                              {t.title}
+                            </span>
+                            <span className="candidate-task-meta-mini">
+                              {t.dueDate
+                                ? `Hạn ${new Date(t.dueDate).toLocaleDateString('vi-VN')}`
+                                : 'Không hạn'}
+                              {' · '}
+                              {docCount} file
+                            </span>
+                          </div>
+                          <span className={`candidate-task-status candidate-task-status--${t.status}`}>
+                            {taskStatusLabel(t.status)}
+                          </span>
                         </button>
-                      </form>
-                    </div>
-                  </div>
-                ))}
+
+                        {isOpen && (
+                          <div className="candidate-task-details">
+                            {t.description ? (
+                              <div className="candidate-task-desc">{t.description}</div>
+                            ) : null}
+
+                            <div className="candidate-task-doc-section">
+                              <div className="candidate-task-doc-title">Giấy tờ</div>
+
+                              {Array.isArray(t.documents) && t.documents.length > 0 ? (
+                                <div className="candidate-doc-list">
+                                  {t.documents.map((d) => (
+                                    <a
+                                      key={d._id || d.storedPath}
+                                      href={d.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="candidate-doc-item"
+                                    >
+                                      {docTypeLabel(d.docType)}: {d.originalName}
+                                    </a>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="candidate-muted">Chưa có tài liệu nào.</div>
+                              )}
+
+                              <form
+                                className="candidate-task-upload"
+                                onSubmit={async (e) => {
+                                  e.preventDefault()
+                                  const form = e.currentTarget
+                                  const docType = form.querySelector('select[name="docType"]')?.value || 'other'
+                                  const fileInput = form.querySelector('input[type="file"][name="file"]')
+                                  const file = fileInput?.files?.[0]
+                                  await handleUploadTaskDoc(t._id, docType, file)
+                                  form.reset()
+                                }}
+                              >
+                                <select
+                                  name="docType"
+                                  className="career-filter candidate-task-upload-select"
+                                  defaultValue="certificate"
+                                >
+                                  <option value="certificate">Chứng chỉ</option>
+                                  <option value="personal_profile">Hồ sơ cá nhân</option>
+                                  <option value="degree">Bằng cấp</option>
+                                  <option value="other">Tài liệu khác</option>
+                                </select>
+                                <input
+                                  type="file"
+                                  name="file"
+                                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                                  className="career-search-input candidate-task-upload-file"
+                                />
+                                <button
+                                  type="submit"
+                                  className="btn btn-primary candidate-task-upload-btn"
+                                  disabled={uploadingTaskId === t._id}
+                                >
+                                  {uploadingTaskId === t._id ? 'Đang tải...' : 'Gửi tài liệu'}
+                                </button>
+                              </form>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
           </section>
@@ -307,11 +384,20 @@ export function CandidatePage() {
               </button>
             </div>
 
-            {loading && <p className="candidate-muted">Đang tải danh sách...</p>}
+            {loading && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <SkeletonCard rows={2} />
+                <SkeletonCard rows={2} />
+              </div>
+            )}
             {error && <p className="error-text">{error}</p>}
 
             {!loading && !error && applications.length === 0 && (
-              <p className="candidate-muted">Bạn chưa ứng tuyển vị trí nào.</p>
+              <EmptyState
+                icon="📝"
+                title="Bạn chưa ứng tuyển vị trí nào."
+                description="Hãy chọn một vị trí phù hợp và nộp hồ sơ."
+              />
             )}
 
             {!loading && !error && applications.length > 0 && (
@@ -319,9 +405,8 @@ export function CandidatePage() {
                 <table className="candidate-table">
                   <thead>
                     <tr>
-                      <th>Hoạt động</th>
+                      <th>Giai đoạn</th>
                       <th>Vị trí</th>
-                      <th>Trạng thái ứng dụng</th>
                       <th>Ngày nộp</th>
                       <th>Hành động</th>
                     </tr>
@@ -334,7 +419,9 @@ export function CandidatePage() {
                       const isWithdrawing = withdrawingId === app._id
                       return (
                         <tr key={app._id}>
-                          <td>{app.stage}</td>
+                          <td style={{ minWidth: 200 }}>
+                            <StageTimeline currentStage={app.stage} />
+                          </td>
                           <td>
                             <button
                               type="button"
@@ -353,7 +440,6 @@ export function CandidatePage() {
                               {job?.workMode ? ` · ${workModeLabel(job.workMode)}` : ''}
                             </div>
                           </td>
-                          <td>{app.stage}</td>
                           <td>{appliedAt ? appliedAt.toLocaleDateString('vi-VN') : 'Không rõ'}</td>
                           <td>
                             <div className="candidate-table-actions">
@@ -363,14 +449,19 @@ export function CandidatePage() {
                                 disabled={!canWithdraw || isWithdrawing}
                                 onClick={() => handleWithdraw(app._id, job?.title || '')}
                               >
-                                {isWithdrawing ? 'Đang rút...' : 'Rút đơn'}
+                                {isWithdrawing ? (
+                                  <>
+                                    <LoadingSpinner size={14} label="Đang rút..." />
+                                    Đang rút...
+                                  </>
+                                ) : 'Rút đơn'}
                               </button>
                               <button
                                 type="button"
-                                className="btn btn-primary"
-                                onClick={() => void handleViewCv(app._id)}
+                                className="btn btn-secondary"
+                                onClick={() => handleViewApplication(app._id)}
                               >
-                                Xem CV
+                                Xem lại đơn đăng ký
                               </button>
                             </div>
                           </td>
@@ -463,6 +554,7 @@ export function CandidatePage() {
         </div>
         <div className="candidate-footer-copy">© {new Date().getFullYear()} Vuman Recruitment Nexus</div>
       </footer>
+
     </main>
   )
 }

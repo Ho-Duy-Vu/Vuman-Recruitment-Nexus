@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSelector } from 'react-redux'
 
 import { fetchAllApplicationsForHR } from '../../api/application.api'
@@ -8,7 +8,12 @@ import {
   fetchCandidateTasks,
   updateCandidateTask
 } from '../../api/candidateTask.api'
+import { DashboardShell } from '../../components/dashboard/DashboardShell'
+import { useHrDashboardNavItems } from '../../hooks/useHrDashboardNavItems'
+import { useHrApplicationTasksSocket } from '../../hooks/useCandidateTaskSocket'
 import { selectCurrentUser } from '../../store/authSlice'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { SkeletonCard } from '../../components/ui/SkeletonCard'
 
 const stageLabel = (s) => s || '-'
 
@@ -18,16 +23,6 @@ const genderLabel = (g) => {
   if (g === 'Nữ') return 'Nữ'
   if (g === 'Không tiết lộ') return 'Không tiết lộ'
   return g
-}
-
-const statusHuman = (s) => {
-  if (s === 'pending') return 'Chờ xử lý'
-  if (s === 'in_progress') return 'Đang thực hiện'
-  if (s === 'submitted') return 'Đã nộp'
-  if (s === 'approved') return 'Đã duyệt'
-  if (s === 'rejected') return 'Từ chối'
-  if (s === 'completed') return 'Hoàn tất'
-  return s || '-'
 }
 
 const docTypeLabel = (t) => {
@@ -40,6 +35,8 @@ const docTypeLabel = (t) => {
 
 export function CandidatesDashboardPage() {
   const user = useSelector(selectCurrentUser)
+  const isAdmin = user?.role === 'admin'
+  const dashboardNavItems = useHrDashboardNavItems(isAdmin)
 
   const [apps, setApps] = useState([])
   const [appsLoading, setAppsLoading] = useState(false)
@@ -93,12 +90,22 @@ export function CandidatesDashboardPage() {
     }
   }
 
+  const loadTasksRef = useRef(loadTasks)
+  loadTasksRef.current = loadTasks
+
   useEffect(() => { void loadApps() }, [stage])
   useEffect(() => {
     if (!selectedApp?._id) return
     void loadTasks(selectedApp._id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAppId])
+
+  const reloadTasksForSocket = useCallback(() => {
+    const id = selectedApp?._id
+    if (id) void loadTasksRef.current(id)
+  }, [selectedApp?._id])
+
+  useHrApplicationTasksSocket(selectedApp?._id, reloadTasksForSocket)
 
   const applicationsDistinctCandidates = useMemo(() => {
     const set = new Set(apps.map((a) => String(a.candidateId?._id || a.candidateId || '')))
@@ -172,18 +179,14 @@ export function CandidatesDashboardPage() {
   }
 
   return (
-    <div className="hr-page-layout">
-      <div className="hr-page-inner">
-        <div className="hr-candidate-dash-topbar">
-          <div className="hr-page-header" style={{ marginBottom: 0 }}>
-            <h1 className="hr-page-title">Dashboard ứng viên</h1>
-          </div>
+    <DashboardShell title="Quản lý bổ sung" navItems={dashboardNavItems}>
+      <div className="hr-candidate-dash-topbar ui-page-enter">
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <select
               className="career-filter"
               value={stage}
               onChange={(e) => setStage(e.target.value)}
-              style={{ background: '#fff', color: '#1c1c1c', height: 36 }}
+              style={{ background: 'var(--bg-white)', color: 'var(--text-primary)', height: 36 }}
             >
               <option value="">Tất cả trạng thái</option>
               <option value="Mới">Mới</option>
@@ -193,32 +196,12 @@ export function CandidatesDashboardPage() {
               <option value="Đã tuyển">Đã tuyển</option>
               <option value="Không phù hợp">Không phù hợp</option>
             </select>
-            <div className="candidate-muted" style={{ padding: 0, textAlign: 'left' }}>
-              Logged in: {user?.email || '-'}
-            </div>
           </div>
-        </div>
+      </div>
 
-        <div className="hr-candidate-dash-grid">
-          {/* Sidebar like reference screenshot */}
-          <aside className="hr-candidate-dash-sidebar">
-            <div className="hr-candidate-sidebar-card">
-              <div className="hr-candidate-sidebar-section">CHUNG</div>
-              <div className="hr-candidate-sidebar-item">
-                Ứng viên: <strong>{applicationsDistinctCandidates}</strong>
-              </div>
-              <div className="hr-candidate-sidebar-item">
-                Hồ sơ: <strong>{apps.length}</strong>
-              </div>
-              <div className="hr-candidate-sidebar-section" style={{ marginTop: 16 }}>TỪNG NHÂN VIÊN</div>
-              <div className="hr-candidate-sidebar-hint">
-                Chọn 1 hồ sơ để quản lý task và tài liệu.
-              </div>
-            </div>
-          </aside>
-
-          <main className="hr-candidate-dash-main">
-            {/* Metrics */}
+      <div className="hr-candidate-dash-grid">
+        <main className="hr-candidate-dash-main" style={{ gridColumn: '1 / -1' }}>
+          {/* Metrics */}
             <section className="hr-candidate-metrics">
               <div className="hr-metric-card">
                 <div className="hr-metric-title">Tổng ứng viên</div>
@@ -246,10 +229,16 @@ export function CandidatesDashboardPage() {
               {/* Applicant list */}
               <div className="hr-candidate-list">
                 <div className="hr-candidate-panel-title">Danh sách hồ sơ</div>
-                {appsLoading && <p className="candidate-muted" style={{ padding: 0 }}>Đang tải...</p>}
+                {appsLoading && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <SkeletonCard rows={1} />
+                    <SkeletonCard rows={1} />
+                    <SkeletonCard rows={1} />
+                  </div>
+                )}
                 {appsError && <p className="error-text">{appsError}</p>}
                 {!appsLoading && !appsError && apps.length === 0 && (
-                  <p className="candidate-muted" style={{ padding: 0 }}>Chưa có dữ liệu.</p>
+                  <EmptyState icon="🧾" title="Chưa có dữ liệu." description="Không có hồ sơ phù hợp với bộ lọc hiện tại." />
                 )}
 
                 {!appsLoading && !appsError && apps.length > 0 && (
@@ -267,7 +256,7 @@ export function CandidatesDashboardPage() {
                         onClick={() => setSelectedAppId(a._id)}
                       >
                         <div>
-                          <div className="hr-app-name">{a.candidateId?.fullName || '—'}</div>
+                          <div className="hr-app-name">{a.formData?.fullName || a.candidateId?.fullName || '—'}</div>
                           <div className="hr-app-email">{a.candidateId?.email || ''}</div>
                           <div className="hr-app-sub">{a.formData?.city || '-'} · {genderLabel(a.formData?.gender)}</div>
                         </div>
@@ -289,7 +278,7 @@ export function CandidatesDashboardPage() {
                   <>
                     <div className="hr-candidate-detail-hero">
                       <div className="hr-candidate-detail-title">
-                        {selectedApp.candidateId?.fullName || '—'}
+                        {selectedApp.formData?.fullName || selectedApp.candidateId?.fullName || '—'}
                       </div>
                       <div className="hr-candidate-detail-sub">
                         {selectedApp.jobId?.title || '-'} · {selectedApp.jobId?.location || '-'} · {selectedApp.stage}
@@ -340,7 +329,12 @@ export function CandidatesDashboardPage() {
                       </div>
                     </div>
 
-                    {tasksLoading && <p className="candidate-muted" style={{ padding: 0 }}>Đang tải task...</p>}
+                    {tasksLoading && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <SkeletonCard rows={1} />
+                        <SkeletonCard rows={1} />
+                      </div>
+                    )}
                     {tasksError && <p className="error-text">{tasksError}</p>}
 
                     {!tasksLoading && !tasksError && tasksRes?.items?.length === 0 && (
@@ -379,7 +373,7 @@ export function CandidatesDashboardPage() {
                                 className="career-filter"
                                 value={t.status}
                                 onChange={(e) => void handleUpdateTaskStatus(t._id, e.target.value)}
-                                style={{ background: '#fff', color: '#1c1c1c', height: 36 }}
+                                style={{ background: 'var(--bg-white)', color: 'var(--text-primary)', height: 36 }}
                               >
                                 <option value="pending">pending</option>
                                 <option value="in_progress">in_progress</option>
@@ -405,9 +399,8 @@ export function CandidatesDashboardPage() {
               </div>
             </section>
           </main>
-        </div>
       </div>
-    </div>
+    </DashboardShell>
   )
 }
 

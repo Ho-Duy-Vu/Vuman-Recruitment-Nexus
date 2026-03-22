@@ -22,7 +22,7 @@ export const updateJobSchema = Joi.object({
   employmentType: Joi.string().valid('full_time', 'part_time'),
   jobCode: Joi.string().trim(),
   requiredSkills: Joi.array().items(Joi.string().trim()),
-  expiresAt: Joi.date(),
+  expiresAt: Joi.date().allow(null),
   formConfig: Joi.object()
 })
   .min(1)

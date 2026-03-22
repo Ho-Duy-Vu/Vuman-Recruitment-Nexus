@@ -385,3 +385,55 @@ Update files:
 
 After implementing: take screenshot or describe what matches/doesn't match
 the 5 reference images. Report any deviations.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6.8 UI/UX Improvements — Polish Checklist
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+UI/UX (Improvement Phase) ✅
+1. Loading states chi tiết
+   - Spinner cho nút khi hành động đang chạy (ví dụ: `ApplyPage`)
+   - Skeleton screens cho vùng danh sách khi đang tải
+2. Skeleton screens
+   - Implement `SkeletonText`, `SkeletonCard`, `SkeletonTable`
+3. Error boundaries
+   - Add `ErrorBoundary` bọc `AppRouter` tại `client/src/App.jsx`
+4. Empty states
+   - Implement `EmptyState` (icon + title + description) cho các trường hợp rỗng
+5. Responsive design hoàn thiện
+   - Tôn trọng breakpoint có sẵn trong `client/src/App.css`
+6. Dark mode
+   - Theme toggle ở `Navbar`
+   - Dùng CSS variables với `html[data-theme="dark"]`
+7. Animations
+   - Entry animation `ui-page-enter`
+   - Respect `prefers-reduced-motion` (tắt animation/shimmer/spinner)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Additional Features — Account UI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1) Profile page
+   - Route: `/profile`
+   - Hiển thị thông tin tài khoản (read-only)
+
+2) Settings page
+   - Route: `/settings`
+   - Hiển thị ngôn ngữ (VI/EN) và tóm tắt tài khoản
+
+3) Help/FAQ page
+   - Route: `/help`
+   - Hiển thị danh sách FAQ dạng accordion
+
+4) Multi-language support (VI/EN) for:
+   - Menu: các link `Profile / Settings / Help`
+   - Header: theme/language toggle và menu dropdown
+   - Account pages: giữ nguyên tiếng Việt (không đổi theo ngôn ngữ)
+
+Update files:
+- client/src/contexts/I18nContext.jsx
+- client/src/pages/account/ProfilePage.jsx
+- client/src/pages/account/SettingsPage.jsx
+- client/src/pages/account/HelpPage.jsx
+- client/src/router/AppRouter.jsx
+- client/src/components/common/Navbar.jsx

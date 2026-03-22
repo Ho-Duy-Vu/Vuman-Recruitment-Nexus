@@ -83,7 +83,8 @@ api.interceptors.response.use(
 
       store.dispatch(
         setCredentials({
-          user: user || state.auth.user,
+          /** Server trả user mới từ DB — giữ applyProfile đồng bộ sau rotate token */
+          user: user ?? state.auth.user,
           accessToken: newAccessToken,
           refreshToken: newRefreshToken
         })

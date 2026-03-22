@@ -1,7 +1,4 @@
-jest.mock('../../queues/workers/ai.worker.js', () => ({}))
-jest.mock('../../queues/ai.queue.js', () => ({
-  aiQueue: {},
-  addAIJob: jest.fn(),
+jest.mock('../../queues/bullBoard.js', () => ({
   bullBoardRouter: (req, res, next) => next()
 }))
 jest.mock('ioredis', () => {
@@ -35,7 +32,6 @@ beforeAll(async () => {
   process.env.CAND_JWT_SECRET = 'test_cand_secret_at_least_32_chars_long'
   process.env.REFRESH_JWT_SECRET = 'test_refresh_secret_at_least_32_chars'
   process.env.REDIS_URL = 'redis://localhost:6379'
-  process.env.GEMINI_API_KEY = 'test_gemini_key'
   process.env.SMTP_HOST = 'localhost'
   process.env.SMTP_PORT = '1025'
   process.env.SMTP_USER = 'test'

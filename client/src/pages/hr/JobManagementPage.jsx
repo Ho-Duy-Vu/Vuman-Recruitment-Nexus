@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useSelector } from 'react-redux'
-import { useNavigate } from 'react-router-dom'
 import {
   closeJob,
   createJob,
@@ -9,6 +8,9 @@ import {
   publishJob,
   updateJob
 } from '../../api/job.api'
+import { DashboardShell } from '../../components/dashboard/DashboardShell'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import { useHrDashboardNavItems } from '../../hooks/useHrDashboardNavItems'
 import { selectCurrentUser } from '../../store/authSlice'
 
 const DEFAULT_FORM = {
@@ -18,7 +20,17 @@ const DEFAULT_FORM = {
   workMode: 'onsite',
   employmentType: 'full_time',
   description: '',
-  requiredSkills: ''
+  requiredSkills: '',
+  expiresAt: ''
+}
+
+/** ISO → giá trị cho input datetime-local (local) */
+const toDatetimeLocalValue = (iso) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 const normalizeSkills = (text) =>
@@ -36,9 +48,9 @@ const statusLabel = (s) => {
 
 export function JobManagementPage() {
   const user = useSelector(selectCurrentUser)
-  const navigate = useNavigate()
 
   const isAdmin = user?.role === 'admin'
+  const dashboardNavItems = useHrDashboardNavItems(isAdmin)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -61,9 +73,32 @@ export function JobManagementPage() {
   const [form, setForm] = useState(DEFAULT_FORM)
   const [saving, setSaving] = useState(false)
 
-  const query = useMemo(() => ({ ...filters, page, limit }), [filters, page, limit])
+  /** Bài A: gõ bộ phận không bắn API từng ký tự (debounce 280ms) + deferred cho query ổn định */
+  const debouncedDepartment = useDebouncedValue(filters.department, 280)
+  const deferredDepartment = useDeferredValue(debouncedDepartment)
 
-  const load = async () => {
+  const query = useMemo(
+    () => ({
+      status: filters.status,
+      department: deferredDepartment,
+      employmentType: filters.employmentType,
+      location: filters.location,
+      workMode: filters.workMode,
+      page,
+      limit
+    }),
+    [
+      filters.status,
+      deferredDepartment,
+      filters.employmentType,
+      filters.location,
+      filters.workMode,
+      page,
+      limit
+    ]
+  )
+
+  const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -75,12 +110,11 @@ export function JobManagementPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [query])
 
   useEffect(() => {
     void load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, filters.status, filters.department, filters.employmentType, filters.location, filters.workMode])
+  }, [load])
 
   const openCreate = () => {
     setEditing(null)
@@ -97,7 +131,8 @@ export function JobManagementPage() {
       workMode: job.workMode || 'onsite',
       employmentType: job.employmentType || 'full_time',
       description: job.description || '',
-      requiredSkills: (job.requiredSkills || []).join(', ')
+      requiredSkills: (job.requiredSkills || []).join(', '),
+      expiresAt: toDatetimeLocalValue(job.expiresAt)
     })
     setDrawerOpen(true)
   }
@@ -113,6 +148,7 @@ export function JobManagementPage() {
     setSaving(true)
     setError(null)
     try {
+      const expiresIso = form.expiresAt ? new Date(form.expiresAt).toISOString() : null
       const payload = {
         title: form.title.trim(),
         department: form.department.trim(),
@@ -122,6 +158,8 @@ export function JobManagementPage() {
         description: form.description,
         requiredSkills: normalizeSkills(form.requiredSkills)
       }
+      if (expiresIso) payload.expiresAt = expiresIso
+      else if (editing?._id) payload.expiresAt = null
 
       if (editing?._id) {
         await updateJob(editing._id, payload)
@@ -178,17 +216,7 @@ export function JobManagementPage() {
   const pageCount = Math.max(1, Math.ceil(total / limit))
 
   return (
-    <main className="admin-layout">
-      <div className="admin-header">
-        <button type="button" className="career-back-link" onClick={() => navigate('/hr/kanban')}>
-          ← Quay lại Kanban
-        </button>
-        <h1 className="apply-title">Quản lý công việc</h1>
-        <p className="apply-section-description">
-          Tạo, chỉnh sửa và quản lý trạng thái công việc. Admin có quyền xóa công việc.
-        </p>
-      </div>
-
+    <DashboardShell title="Quản lý công việc" navItems={dashboardNavItems}>
       <section className="career-detail-card admin-card">
         <div className="candidate-apps-header">
           <h2 className="candidate-section-title">Danh sách công việc</h2>
@@ -200,7 +228,7 @@ export function JobManagementPage() {
                 setPage(1)
                 setFilters((p) => ({ ...p, status: e.target.value }))
               }}
-              style={{ background: '#fff', color: '#1c1c1c' }}
+              style={{ background: 'var(--bg-white)', color: 'var(--text-primary)' }}
             >
               <option value="">Trạng thái</option>
               <option value="draft">Bản nháp</option>
@@ -215,7 +243,7 @@ export function JobManagementPage() {
                 setFilters((p) => ({ ...p, department: e.target.value }))
               }}
               placeholder="Lọc theo bộ phận (ví dụ: Engineering)"
-              style={{ maxWidth: 340, background: '#fff', color: '#1c1c1c' }}
+              style={{ maxWidth: 340, background: 'var(--bg-white)', color: 'var(--text-primary)' }}
             />
             <select
               className="career-filter"
@@ -224,7 +252,7 @@ export function JobManagementPage() {
                 setPage(1)
                 setFilters((p) => ({ ...p, employmentType: e.target.value }))
               }}
-              style={{ background: '#fff', color: '#1c1c1c' }}
+              style={{ background: 'var(--bg-white)', color: 'var(--text-primary)' }}
             >
               <option value="">Loại hình</option>
               <option value="part_time">part time</option>
@@ -237,7 +265,7 @@ export function JobManagementPage() {
                 setPage(1)
                 setFilters((p) => ({ ...p, location: e.target.value }))
               }}
-              style={{ background: '#fff', color: '#1c1c1c' }}
+              style={{ background: 'var(--bg-white)', color: 'var(--text-primary)' }}
             >
               <option value="">Địa điểm</option>
               <option value="TP. Hồ Chí Minh">HCM</option>
@@ -255,7 +283,7 @@ export function JobManagementPage() {
                 setPage(1)
                 setFilters((p) => ({ ...p, workMode: e.target.value }))
               }}
-              style={{ background: '#fff', color: '#1c1c1c' }}
+              style={{ background: 'var(--bg-white)', color: 'var(--text-primary)' }}
             >
               <option value="">Thêm ▾</option>
               <option value="onsite">onsite</option>
@@ -274,7 +302,11 @@ export function JobManagementPage() {
         {error && <p className="error-text">{error}</p>}
 
         <div className="admin-hr-list">
-          {items.map((j) => (
+          {items.map((j) => {
+            const exp = j.expiresAt ? new Date(j.expiresAt) : null
+            const isExpiredOpen =
+              j.status === 'open' && exp && !Number.isNaN(exp.getTime()) && exp.getTime() < Date.now()
+            return (
             <div key={j._id} className="admin-hr-row">
               <div className="admin-hr-main">
                 <div className="admin-hr-name">
@@ -282,6 +314,21 @@ export function JobManagementPage() {
                   <span style={{ fontSize: 12, fontWeight: 700, color: j.status === 'open' ? '#0d6e56' : '#767676' }}>
                     ({statusLabel(j.status)})
                   </span>
+                  {isExpiredOpen && (
+                    <span
+                      style={{
+                        marginLeft: 8,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: '#b45309',
+                        background: '#fef3c7',
+                        padding: '2px 8px',
+                        borderRadius: 99
+                      }}
+                    >
+                      Quá hạn (chờ cron đóng)
+                    </span>
+                  )}
                 </div>
                 <div className="admin-hr-meta">
                   Mã: {j.jobCode || j._id}
@@ -293,6 +340,12 @@ export function JobManagementPage() {
                   Làm việc: {j.workMode || '-'}
                   {' · '}
                   Thời gian: {j.employmentType || '-'}
+                  {j.expiresAt ? (
+                    <>
+                      {' · '}
+                      Hết hạn: {new Date(j.expiresAt).toLocaleString('vi-VN')}
+                    </>
+                  ) : null}
                 </div>
               </div>
 
@@ -316,13 +369,14 @@ export function JobManagementPage() {
                 )}
               </div>
             </div>
-          ))}
+            )
+          })}
           {!loading && items.length === 0 && <p className="candidate-muted">Chưa có công việc.</p>}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, alignItems: 'center' }}>
           <span style={{ fontSize: 13, color: '#767676' }}>
-            Tổng: <strong style={{ color: '#1c1c1c' }}>{total}</strong>
+            Tổng: <strong style={{ color: 'var(--text-primary)' }}>{total}</strong>
           </span>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
@@ -333,7 +387,7 @@ export function JobManagementPage() {
             >
               Trang trước
             </button>
-            <span style={{ fontSize: 13, color: '#1c1c1c', fontWeight: 600 }}>
+            <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>
               {page} / {pageCount}
             </span>
             <button
@@ -479,6 +533,18 @@ export function JobManagementPage() {
                     rows={7}
                   />
                 </label>
+
+                <label className="job-form-field job-form-field--full">
+                  <span>Ngày hết hạn tuyển (tùy chọn)</span>
+                  <input
+                    type="datetime-local"
+                    value={form.expiresAt}
+                    onChange={(e) => setForm((p) => ({ ...p, expiresAt: e.target.value }))}
+                  />
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                    Để trống = không giới hạn. Quá hạn: job đang mở sẽ được cron đóng mỗi giờ.
+                  </span>
+                </label>
               </div>
 
               <div className="modal-actions">
@@ -493,7 +559,7 @@ export function JobManagementPage() {
           </div>
         </div>
       )}
-    </main>
+    </DashboardShell>
   )
 }
 

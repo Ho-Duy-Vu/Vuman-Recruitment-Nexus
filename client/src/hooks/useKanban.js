@@ -19,9 +19,12 @@ const groupByStage = (applications) => {
   })
   Object.keys(groups).forEach((stage) => {
     groups[stage].sort((a, b) => {
-      const scoreA = a.aiEvaluation?.matchingScore ?? -1
-      const scoreB = b.aiEvaluation?.matchingScore ?? -1
-      return scoreB - scoreA
+      const tA = new Date(a.appliedAt || a.createdAt || 0).getTime()
+      const tB = new Date(b.appliedAt || b.createdAt || 0).getTime()
+      if (tB !== tA) return tB - tA
+      const nameA = (a.formData?.fullName || a.candidateId?.fullName || '').toLowerCase()
+      const nameB = (b.formData?.fullName || b.candidateId?.fullName || '').toLowerCase()
+      return nameA.localeCompare(nameB, 'vi')
     })
   })
   return groups
@@ -64,9 +67,14 @@ export const useKanban = (jobId) => {
         const next = { ...prev }
         const srcList = [...(next[srcStage] || [])]
         const dstList = srcStage === dstStage ? srcList : [...(next[dstStage] || [])]
-        const [moved] = srcList.splice(source.index, 1)
+        // Remove by id to avoid index mismatch when UI renders a truncated list.
+        const movedIdx = srcList.findIndex((a) => String(a._id) === String(draggableId))
+        if (movedIdx === -1) return prev
+        const [moved] = srcList.splice(movedIdx, 1)
         const movedWithNewStage = { ...moved, stage: dstStage }
-        dstList.splice(destination.index, 0, movedWithNewStage)
+        // Keep UI stable: append rather than inserting by destination.index.
+        // This prevents wrong positioning when we only render a subset.
+        dstList.push(movedWithNewStage)
         next[srcStage] = srcList
         if (srcStage !== dstStage) next[dstStage] = dstList
         return next
@@ -82,7 +90,8 @@ export const useKanban = (jobId) => {
             if (idx !== -1) {
               const [card] = dstList.splice(idx, 1)
               const srcList = [...(next[srcStage] || [])]
-              srcList.splice(source.index, 0, { ...card, stage: srcStage })
+              // Re-add at end to avoid index mismatch when truncated view.
+              srcList.push({ ...card, stage: srcStage })
               next[dstStage] = dstList
               next[srcStage] = srcList
             }
@@ -104,7 +113,8 @@ export const useKanban = (jobId) => {
           if (idx !== -1) {
             const [card] = dstList.splice(idx, 1)
             const srcList = [...(next[srcStage] || [])]
-            srcList.splice(source.index, 0, { ...card, stage: srcStage })
+            // Re-add at end to keep stable when UI is truncated.
+            srcList.push({ ...card, stage: srcStage })
             next[dstStage] = dstList
             next[srcStage] = srcList
           }
@@ -118,10 +128,11 @@ export const useKanban = (jobId) => {
   const confirmSchedule = useCallback(async (appId, srcStage, scheduleData) => {
     try {
       await changeApplicationStage(appId, 'Phỏng vấn', scheduleData)
+      await load()
     } catch {
       // error handled in caller
     }
-  }, [])
+  }, [load])
 
   return { columns, loading, error, handleDragEnd, confirmSchedule, reload: load }
 }

@@ -5,7 +5,6 @@ jest.mock('../../config/env.js', () => ({
     refreshJwtSecret: 'test_refresh_secret_at_least_32_chars',
     mongoUri: 'mongodb://localhost:27017/test',
     redisUrl: 'redis://localhost:6379',
-    geminiApiKey: 'test',
     smtpHost: 'localhost',
     smtpPort: 1025,
     smtpUser: 'test',
@@ -24,8 +23,6 @@ const mockFindById = jest.fn().mockResolvedValue({
   jobId: 'job1',
   stage: 'Mới'
 })
-const mockFindByApplication = jest.fn().mockResolvedValue(null)
-const mockUpdateHRDecision = jest.fn().mockResolvedValue({})
 
 jest.mock('../../repositories/application.repository.js', () => ({
   applicationRepository: {
@@ -34,17 +31,20 @@ jest.mock('../../repositories/application.repository.js', () => ({
   }
 }))
 
-jest.mock('../../repositories/aiEvaluation.repository.js', () => ({
-  aiEvaluationRepository: {
-    findByApplication: (...args) => mockFindByApplication(...args),
-    updateHRDecision: (...args) => mockUpdateHRDecision(...args)
-  }
+jest.mock('../../queues/email.queue.js', () => ({
+  addEmailJob: jest.fn().mockResolvedValue(undefined)
+}))
+
+jest.mock('../../socket/socket.js', () => ({
+  getIO: jest.fn()
 }))
 
 import mongoose from 'mongoose'
 import { changeStage } from '../../services/stageChange.service.js'
 import { connectTestDB, clearTestDB, disconnectTestDB } from '../setup.js'
 import { InterviewSchedule } from '../../models/InterviewSchedule.model.js'
+import { addEmailJob } from '../../queues/email.queue.js'
+import { getIO } from '../../socket/socket.js'
 
 const APP_ID = new mongoose.Types.ObjectId().toString()
 const HR_ID = new mongoose.Types.ObjectId().toString()
@@ -56,6 +56,10 @@ beforeAll(async () => {
 afterEach(async () => {
   await clearTestDB()
   jest.clearAllMocks()
+  const emit = jest.fn()
+  getIO.mockReturnValue({
+    to: jest.fn().mockReturnValue({ emit })
+  })
 })
 
 afterAll(async () => {
@@ -107,43 +111,31 @@ describe('changeStage — invalid inputs', () => {
 })
 
 describe('changeStage — side effects', () => {
-  it('should log email queue stub on every stage change', async () => {
-    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+  it('should NOT enqueue email for stages without template', async () => {
     await changeStage(APP_ID, 'Đang xét duyệt', HR_ID)
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[Email Queue]'),
-      expect.anything()
-    )
-    consoleSpy.mockRestore()
+    expect(addEmailJob).not.toHaveBeenCalled()
   })
 
-  it('should log socket emit stub on every stage change', async () => {
-    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
-    await changeStage(APP_ID, 'Đề xuất', HR_ID)
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[Socket]'),
-      expect.anything()
-    )
-    consoleSpy.mockRestore()
-  })
-})
-
-describe('changeStage — discrepancy detection', () => {
-  it('should set discrepancy when AI score ≥ 70 but HR → Không phù hợp', async () => {
-    mockFindByApplication.mockResolvedValueOnce({ matchingScore: 85 })
+  it('should enqueue stage_rejected email when moving to Không phù hợp', async () => {
     await changeStage(APP_ID, 'Không phù hợp', HR_ID)
-    expect(mockUpdateHRDecision).toHaveBeenCalledWith(APP_ID, 'Không phù hợp')
+    expect(addEmailJob).toHaveBeenCalledWith({
+      type: 'stage_rejected',
+      applicationId: APP_ID
+    })
   })
 
-  it('should set discrepancy when AI score < 70 but HR → Đã tuyển', async () => {
-    mockFindByApplication.mockResolvedValueOnce({ matchingScore: 45 })
-    await changeStage(APP_ID, 'Đã tuyển', HR_ID)
-    expect(mockUpdateHRDecision).toHaveBeenCalledWith(APP_ID, 'Đã tuyển')
-  })
+  it('should emit application:stage_changed to job room', async () => {
+    const emit = jest.fn()
+    const to = jest.fn().mockReturnValue({ emit })
+    getIO.mockReturnValueOnce({ to })
 
-  it('should NOT set discrepancy when AI score ≥ 70 AND HR → Đã tuyển', async () => {
-    mockFindByApplication.mockResolvedValueOnce({ matchingScore: 75 })
-    await changeStage(APP_ID, 'Đã tuyển', HR_ID)
-    expect(mockUpdateHRDecision).not.toHaveBeenCalled()
+    await changeStage(APP_ID, 'Đề xuất', HR_ID)
+
+    expect(to).toHaveBeenCalledWith('job:job1')
+    expect(emit).toHaveBeenCalledWith('application:stage_changed', {
+      applicationId: APP_ID,
+      newStage: 'Đề xuất',
+      changedBy: HR_ID
+    })
   })
 })

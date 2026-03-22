@@ -91,6 +91,16 @@ class JobRepository {
     }
     return deleted
   }
+
+  /** Job đang mở nhưng đã quá hạn expiresAt — dùng cho cron đóng tự động */
+  async findExpiredOpenJobs() {
+    const now = new Date()
+    return Job.find({
+      status: 'open',
+      expiresAt: { $ne: null, $lt: now }
+    })
+      .lean()
+  }
 }
 
 export const jobRepository = new JobRepository()

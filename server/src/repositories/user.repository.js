@@ -1,4 +1,4 @@
-import { User } from '../models/User.model.js'
+import { User, CandidateUser } from '../models/User.model.js'
 import { AppError } from '../utils/AppError.js'
 
 class UserRepository {
@@ -24,7 +24,12 @@ class UserRepository {
   }
 
   async updateById(id, updates) {
-    const user = await User.findByIdAndUpdate(id, updates, {
+    /**
+     * applyProfile chỉ thuộc schema ứng viên — cập nhật qua CandidateUser để Mongoose
+     * validate/ghi đúng subdocument (tránh mất applyProfile khi dùng model gốc).
+     */
+    const Model = updates.applyProfile !== undefined ? CandidateUser : User
+    const user = await Model.findByIdAndUpdate(id, updates, {
       returnDocument: 'after',
       runValidators: true
     })
@@ -53,6 +58,36 @@ class UserRepository {
   async findAllHR() {
     const users = await User.find({ role: 'hr' }).select('-passwordHash -refreshToken').lean()
     return users
+  }
+
+  async findAllUsers() {
+    // Admin chỉ cần danh sách người dùng (không trả lại password/refreshToken và các token nhạy cảm).
+    const users = await User.find({})
+      .select(
+        '-passwordHash -refreshToken -passwordResetToken -passwordResetExpiresAt -emailVerifyToken -emailVerifyExpires'
+      )
+      .lean()
+    return users
+  }
+
+  async findCandidateById(id) {
+    const user = await User.findOne({ _id: id, role: 'candidate' })
+      .select('-passwordHash -refreshToken')
+      .lean()
+    if (!user) {
+      throw new AppError('User not found', 404)
+    }
+    return user
+  }
+
+  async deleteCandidateById(id) {
+    const user = await User.findOneAndDelete({ _id: id, role: 'candidate' })
+      .select('-passwordHash -refreshToken')
+      .lean()
+    if (!user) {
+      throw new AppError('User not found', 404)
+    }
+    return user
   }
 
   async findHRById(id) {
@@ -134,6 +169,14 @@ class UserRepository {
     }
 
     return user
+  }
+
+  async findByPasswordResetTokenHash(tokenHash) {
+    const user = await User.findOne({ passwordResetToken: tokenHash })
+      .select('passwordHash passwordResetToken passwordResetExpiresAt')
+      .lean()
+
+    return user || null
   }
 }
 

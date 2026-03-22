@@ -43,6 +43,11 @@
   --radius-lg: 8px;
   --radius-input: 4px;
 
+  /* UI/UX Polish */
+  --skeleton-base: rgba(148, 163, 184, 0.35);
+  --skeleton-highlight: rgba(148, 163, 184, 0.6);
+  --ui-shadow-soft: rgba(15, 23, 42, 0.08);
+
   /* Legacy compat */
   --color-primary-hover: #0a5a46;
   --color-hero-start: #1a1a2e;
@@ -52,6 +57,34 @@
   --color-border-tertiary: rgba(148, 163, 184, 0.5);
   --border-radius-md: 4px;
   --border-radius-lg: 8px;
+}
+
+html[data-theme='dark'] {
+  /* Backgrounds */
+  --bg-page: #0b1220;
+  --bg-white: #0f172a;
+  --bg-input-focus: #13233d;
+  --bg-nav: #0f172a;
+
+  /* Text */
+  --text-primary: #e5e7eb;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-link: #e5e7eb;
+  --text-link-nav: #e5e7eb;
+
+  /* Border */
+  --border-light: #1f2a44;
+  --border-input: #334155;
+  --border-card: #1f2a44;
+  --color-border-tertiary: rgba(148, 163, 184, 0.35);
+
+  /* Legacy compat */
+  --color-text-body: #e5e7eb;
+
+  /* UI/UX Polish */
+  --skeleton-base: rgba(148, 163, 184, 0.22);
+  --skeleton-highlight: rgba(148, 163, 184, 0.45);
 }
 
 /* ===== RESET ===== */

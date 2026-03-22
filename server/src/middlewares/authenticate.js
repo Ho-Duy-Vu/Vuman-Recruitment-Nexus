@@ -48,7 +48,9 @@ export const authenticate = (req, res, next) => {
       (req.originalUrl === '/api/auth/change-password' ||
         req.originalUrl.endsWith('/api/auth/change-password'))
 
-    if (req.user.role === 'hr' && req.user.mustChangePassword && !isChangePasswordRoute) {
+    const isSessionManagementRoute = req.originalUrl.includes('/api/auth/sessions')
+
+    if (req.user.role === 'hr' && req.user.mustChangePassword && !(isChangePasswordRoute || isSessionManagementRoute)) {
       return next(new AppError('Password change required', 403))
     }
 

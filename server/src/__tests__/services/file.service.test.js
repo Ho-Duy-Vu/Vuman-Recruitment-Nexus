@@ -5,7 +5,6 @@ jest.mock('../../config/env.js', () => ({
     refreshJwtSecret: 'test_refresh_secret_at_least_32_chars',
     mongoUri: 'mongodb://localhost:27017/test',
     redisUrl: 'redis://localhost:6379',
-    geminiApiKey: 'test',
     smtpHost: 'localhost',
     smtpPort: 1025,
     smtpUser: 'test',

@@ -1,4 +1,10 @@
 import { userRepository } from '../repositories/user.repository.js'
+import {
+  aggregateApplicationsByDay,
+  aggregateApplicationsBySource,
+  aggregateApplicationsByStage,
+  countTotalApplications
+} from '../repositories/analytics.repository.js'
 import { AppError } from '../utils/AppError.js'
 import { hashPassword } from './auth.service.js'
 
@@ -29,6 +35,49 @@ export const listHR = async () => {
   return userRepository.findAllHR()
 }
 
+export const listAllUsers = async () => {
+  return userRepository.findAllUsers()
+}
+
+export const createCandidate = async ({ email, fullName, phone, password }) => {
+  try {
+    await userRepository.findByEmail(email)
+    throw new AppError('Email already registered', 409)
+  } catch (error) {
+    if (!(error instanceof AppError) || error.statusCode !== 404) {
+      throw error
+    }
+  }
+
+  const passwordHash = await hashPassword(password)
+  const user = await userRepository.create({
+    email,
+    passwordHash,
+    role: 'candidate',
+    fullName,
+    phone: phone || undefined,
+    emailVerified: true,
+    isActive: true
+  })
+
+  return { user }
+}
+
+export const updateCandidate = async (candidateId, updates) => {
+  await userRepository.findCandidateById(candidateId)
+
+  const allowed = {}
+  if (typeof updates.fullName !== 'undefined') allowed.fullName = updates.fullName
+  if (typeof updates.phone !== 'undefined') allowed.phone = updates.phone || undefined
+  if (typeof updates.isActive !== 'undefined') allowed.isActive = updates.isActive
+
+  return userRepository.updateById(candidateId, allowed)
+}
+
+export const deleteCandidate = async (candidateId) => {
+  return userRepository.deleteCandidateById(candidateId)
+}
+
 export const updateHR = async (hrId, updates) => {
   await userRepository.findHRById(hrId)
 
@@ -42,4 +91,21 @@ export const updateHR = async (hrId, updates) => {
 
 export const deleteHR = async (hrId) => {
   return userRepository.deleteById(hrId)
+}
+
+/** Analytics tổng hợp ứng tuyển (admin) — không dùng metric AI */
+export const getApplicationAnalytics = async ({ jobId } = {}) => {
+  const [bySource, byStage, byDay, total] = await Promise.all([
+    aggregateApplicationsBySource({ jobId }),
+    aggregateApplicationsByStage({ jobId }),
+    aggregateApplicationsByDay({ days: 21, jobId }),
+    countTotalApplications({ jobId })
+  ])
+
+  return {
+    bySource: bySource.map((r) => ({ source: r._id, count: r.count })),
+    byStage: byStage.map((r) => ({ stage: r._id, count: r.count })),
+    byDay: byDay.map((r) => ({ date: r._id, count: r.count })),
+    total
+  }
 }

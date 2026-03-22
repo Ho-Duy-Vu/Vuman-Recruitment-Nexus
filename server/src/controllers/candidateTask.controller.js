@@ -10,6 +10,23 @@ import {
   createCandidateTaskSchema,
   updateCandidateTaskSchema
 } from '../validators/candidateTask.validator.js'
+import { notifyCandidateTaskUpdate } from '../socket/candidateTaskNotify.js'
+
+function emitTaskSocket(task, action, extra = {}) {
+  if (!task) return
+  const candidateId = task.candidateId?._id || task.candidateId
+  const applicationId = task.applicationId?._id || task.applicationId
+  const jobId = task.jobId?._id || task.jobId
+  notifyCandidateTaskUpdate({
+    candidateId: candidateId ? String(candidateId) : null,
+    applicationId: applicationId ? String(applicationId) : null,
+    jobId: jobId ? String(jobId) : null,
+    action,
+    taskId: task._id ? String(task._id) : null,
+    task: action === 'deleted' ? null : task,
+    ...extra
+  })
+}
 
 const buildTaskWithDocuments = async (tasks, reqUserId) => {
   const taskIds = tasks.map((t) => t._id).filter(Boolean)
@@ -48,6 +65,12 @@ export const createCandidateTaskController = async (req, res, next) => {
     }
 
     const created = await candidateTaskRepository.create(payload)
+    try {
+      const full = await candidateTaskRepository.findById(created._id)
+      emitTaskSocket(full, 'created')
+    } catch {
+      emitTaskSocket(created, 'created')
+    }
     sendSuccess(res, { task: created }, 201)
   } catch (error) {
     next(error)
@@ -131,6 +154,7 @@ export const deleteCandidateTaskController = async (req, res, next) => {
       }
     }
 
+    emitTaskSocket(task, 'deleted')
     await candidateTaskRepository.deleteById(taskId)
     sendSuccess(res, { message: 'Xóa task thành công' })
   } catch (error) {
@@ -178,6 +202,26 @@ export const uploadTaskDocumentController = async (req, res, next) => {
     await candidateTaskRepository.updateById(taskId, { status: nextStatus })
 
     const url = generateSignedUrl(document.storedPath, req.user.id)
+    try {
+      const full = await candidateTaskRepository.findById(taskId)
+      emitTaskSocket(full, 'document_uploaded', {
+        document: {
+          _id: document._id,
+          originalName: document.originalName,
+          docType: document.docType,
+          mimeType: document.mimeType
+        }
+      })
+    } catch {
+      emitTaskSocket({ ...task, status: nextStatus, _id: taskId }, 'document_uploaded', {
+        document: {
+          _id: document._id,
+          originalName: document.originalName,
+          docType: document.docType,
+          mimeType: document.mimeType
+        }
+      })
+    }
     sendSuccess(res, { document, url }, 201)
   } catch (error) {
     next(error)

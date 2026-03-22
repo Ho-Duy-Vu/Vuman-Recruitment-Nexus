@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken'
 import crypto from 'node:crypto'
 
 import { userRepository } from '../repositories/user.repository.js'
+import { refreshSessionRepository } from '../repositories/refreshSession.repository.js'
 import { env } from '../config/env.js'
 import { AppError } from '../utils/AppError.js'
 
@@ -46,36 +47,61 @@ export const verifyAccessToken = (token, role) => {
   return jwt.verify(token, secret)
 }
 
-export const generateRefreshToken = async (userId) => {
+export const generateRefreshToken = async (userId, { userAgent, ip } = {}) => {
   const rawToken = crypto.randomBytes(REFRESH_TOKEN_BYTE_LENGTH).toString('hex')
   const hashedToken = hashRefreshToken(rawToken)
 
+  // Persist refresh session for "active session list" + remote logout.
+  await refreshSessionRepository.create({
+    userId,
+    refreshTokenHash: hashedToken,
+    userAgent,
+    ip
+  })
+
+  // Keep legacy field (single active refresh token) for backwards compatibility/tests.
   await userRepository.setRefreshTokenHash(userId, hashedToken)
 
   return rawToken
 }
 
-export const refreshAccessToken = async (rawRefreshToken) => {
+export const refreshAccessToken = async (rawRefreshToken, { userAgent, ip } = {}) => {
   if (!rawRefreshToken) {
     throw new AppError('Invalid refresh token', 401)
   }
 
   const hashedToken = hashRefreshToken(rawRefreshToken)
-  const user = await userRepository.findByRefreshTokenHash(hashedToken)
+  const session = await refreshSessionRepository.findActiveByRefreshTokenHash(hashedToken)
+  if (!session) throw new AppError('Invalid refresh token', 401)
+
+  const user = await userRepository.findById(session.userId)
+  if (!user || !user.isActive) throw new AppError('Invalid refresh token', 401)
 
   const accessToken = generateAccessToken(user)
 
   const newRawRefreshToken = crypto.randomBytes(REFRESH_TOKEN_BYTE_LENGTH).toString('hex')
   const newHashedRefreshToken = hashRefreshToken(newRawRefreshToken)
+  await refreshSessionRepository.updateById(session._id || session.id, {
+    refreshTokenHash: newHashedRefreshToken,
+    userAgent: String(userAgent || session.userAgent || ''),
+    ip: String(ip || session.ip || ''),
+    lastUsedAt: new Date(),
+    revokedAt: null
+  })
+
   await userRepository.setRefreshTokenHash(user._id || user.id, newHashedRefreshToken)
+
+  const freshUser = await userRepository.findById(session.userId)
 
   return {
     accessToken,
-    refreshToken: newRawRefreshToken
+    refreshToken: newRawRefreshToken,
+    user: freshUser
   }
 }
 
 export const revokeRefreshToken = async (userId) => {
+  await refreshSessionRepository.revokeAllActiveByUserId(userId)
   await userRepository.clearRefreshToken(userId)
 }
 
@@ -92,7 +118,7 @@ export const generateEmailVerifyToken = async (userId) => {
   return token
 }
 
-export const login = async (email, password) => {
+export const login = async (email, password, meta = {}) => {
   let authUser
 
   try {
@@ -118,7 +144,7 @@ export const login = async (email, password) => {
   }
 
   const accessToken = generateAccessToken(authUser)
-  const refreshToken = await generateRefreshToken(authUser._id || authUser.id)
+  const refreshToken = await generateRefreshToken(authUser._id || authUser.id, meta)
 
   const userObject = typeof authUser.toJSON === 'function' ? authUser.toJSON() : authUser
   const {
@@ -140,57 +166,44 @@ export const login = async (email, password) => {
 
 export const generatePasswordResetToken = async (email) => {
   const authUser = await userRepository.findAuthUserByEmail(email)
+  if (!authUser) return null
 
-  if (!authUser) {
-    throw new AppError('User not found', 404)
-  }
+  const rawToken = crypto.randomBytes(32).toString('hex')
+  const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex')
 
-  const payload = {
-    sub: authUser._id.toString(),
-    purpose: 'password-reset'
-  }
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
+  await userRepository.updateById(authUser._id, {
+    passwordResetToken: hashedToken,
+    passwordResetExpiresAt: expiresAt
+  })
 
-  const token = jwt.sign(payload, env.candJwtSecret, { expiresIn: '1h' })
-
-  await userRepository.updateById(authUser._id, { passwordResetToken: token })
-
-  return token
+  return rawToken
 }
 
 export const resetPassword = async (token, newPassword) => {
-  let payload
-  try {
-    payload = jwt.verify(token, env.candJwtSecret)
-  } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      throw new AppError('Reset link expired', 401)
-    }
-    throw new AppError('Invalid token', 401)
+  if (!token) throw new AppError('Invalid token', 401)
+
+  const hashedToken = crypto.createHash('sha256').update(String(token)).digest('hex')
+  const user = await userRepository.findByPasswordResetTokenHash(hashedToken)
+
+  if (!user || !user.passwordResetExpiresAt || user.passwordResetExpiresAt <= new Date()) {
+    throw new AppError('Token invalid/expired', 401)
   }
 
-  if (payload.purpose !== 'password-reset') {
-    throw new AppError('Invalid token purpose', 400)
-  }
-
-  const userId = payload.sub
-  const user = await userRepository.findByIdWithSensitiveFields(userId)
-
-  if (!user) {
-    throw new AppError('User not found', 404)
-  }
-
-  if (user.passwordResetToken !== token) {
-    throw new AppError('Token already used or invalid', 400)
+  const isSameAsCurrent = await comparePassword(newPassword, user.passwordHash)
+  if (isSameAsCurrent) {
+    throw new AppError('New password must be different', 400)
   }
 
   const newHash = await hashPassword(newPassword)
 
-  await userRepository.updateById(userId, {
+  await userRepository.updateById(user._id || user.id, {
     passwordHash: newHash,
-    passwordResetToken: null
+    passwordResetToken: null,
+    passwordResetExpiresAt: null
   })
 
-  await userRepository.clearRefreshToken(userId)
+  await revokeRefreshToken(user._id || user.id)
 }
 
 export const changePassword = async (userId, currentPassword, newPassword) => {
@@ -208,6 +221,10 @@ export const changePassword = async (userId, currentPassword, newPassword) => {
     throw new AppError('Invalid credentials', 401)
   }
 
+  if (newPassword === currentPassword) {
+    throw new AppError('New password must be different', 400)
+  }
+
   const newHash = await hashPassword(newPassword)
 
   await userRepository.updateById(authUser._id, {
@@ -215,7 +232,7 @@ export const changePassword = async (userId, currentPassword, newPassword) => {
     mustChangePassword: false
   })
 
-  await userRepository.clearRefreshToken(authUser._id)
+  await revokeRefreshToken(authUser._id)
 }
 
 export const registerCandidate = async (email, password, fullName) => {
@@ -275,5 +292,41 @@ export const verifyEmail = async (token) => {
   })
 
   return updatedUser
+}
+
+/**
+ * Ứng viên: cập nhật fullName, phone và applyProfile (đồng bộ form Apply).
+ */
+export const updateCandidateProfile = async (userId, body) => {
+  const existing = await userRepository.findById(userId)
+  if (existing.role !== 'candidate') {
+    throw new AppError('Chỉ tài khoản ứng viên được cập nhật hồ sơ này', 403)
+  }
+
+  const updates = {}
+
+  if (body.fullName !== undefined) {
+    updates.fullName = String(body.fullName).trim()
+  }
+
+  if (body.applyProfile && typeof body.applyProfile === 'object') {
+    const cur = existing.applyProfile || {}
+    updates.applyProfile = { ...cur, ...body.applyProfile }
+  }
+
+  if (body.phone !== undefined) {
+    updates.phone = String(body.phone || '').trim()
+  }
+
+  if (updates.applyProfile?.phoneNumber !== undefined) {
+    updates.phone = String(updates.applyProfile.phoneNumber || '').trim()
+  }
+
+  return userRepository.updateById(userId, updates)
+}
+
+/** User hiện tại (đầy đủ applyProfile cho ứng viên) — đồng bộ Redux sau F5 / refresh token */
+export const getCurrentUser = async (userId) => {
+  return userRepository.findById(userId)
 }
 

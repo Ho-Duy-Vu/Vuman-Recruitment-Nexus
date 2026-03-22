@@ -1,8 +1,12 @@
 # task.md — Implementation Task List
 # HRM / ATS System — v1.0
-# 25 Features | 5 Sprints | MERN + Gemini + Socket.io
+# 25 Features | 5 Sprints | MERN + Socket.io + email queue (demo)
 # For use with: Cursor AI
 # Read rules.md FIRST before implementing any task
+#
+# 🇻🇳 Bản tiếng Việt (mục lục + mô tả dễ đọc): **task.vi.md**
+
+> **2026-03-16 — AI CV screening removed:** Gemini, `ai_screening` queue, `AIEvaluation`, `AIScoreCard`, `aiStatus`, and related API/tests were deleted. See **task.vi.md CHANGELOG** and **rules.md §0.1**. Sections below that still mention AI are **historical** unless updated.
 
 ---
 
@@ -183,18 +187,22 @@ Note: verifyEmail() endpoint scaffolded and works if called, but NOT enforced in
 
 ---
 
-### TASK 07 — Admin: CRUD HR Accounts + Force Reset ✅ DONE
+### TASK 07 — Admin: CRUD HR Accounts (Email + Password Create) ✅ DONE
 - [x] Create `admin.controller.js`:
-  - `createHR(req, res)` — create HR user, generate temp password, send invite email with temp pass + login link
+  - `createHR(req, res)` — create HR user using `{ email, fullName, department, password }` (admin nhập mật khẩu), return saved `user`
   - `listHR(req, res)` — return all HR users (no sensitive fields)
   - `updateHR(req, res)` — update fullName, department, isActive
-  - `deleteHR(req, res)` — soft delete: set `isActive: false`
-  - `forceResetPassword(req, res)` — generate new temp password, set `mustChangePassword: true`, revoke refresh tokens, send email
+  - `deleteHR(req, res)` — hard delete HR user
 - [x] Create `admin.routes.js` — all routes guarded with `authenticate` + `authorize('admin')`
 - [x] Add `mustChangePassword` check in `authenticate.js`: if HR has `mustChangePassword: true` → block all routes except `POST /api/auth/change-password`
 - [x] Add `changePassword` endpoint for HR first-login flow
 
-**Acceptance:** Admin can CRUD HR accounts. New HR receives invite email with temp credentials. ✅
+**Acceptance:** Admin can CRUD HR accounts. New HR is created with admin-provided password (no temp credential + no force reset route). ✅
+
+---
+### TASK 07b — Session Management (Active Session + Remote Logout)
+- [x] Session management chi tiết
+- [x] Session: Hiển thị session active, cho phép logout từ xa
 
 ---
 
@@ -829,76 +837,84 @@ Note: verifyEmail() endpoint scaffolded and works if called, but NOT enforced in
 
 ---
 
-## SPRINT 5 — Portal + Analytics + Polish
+## SPRINT 5 — Portal + Analytics + Polish ✅
 > Goal: Demo-ready. Full user journeys for all 3 actors complete.
 
 ---
 
-### TASK 25 — Candidate Portal
-- [ ] Create `PortalPage.jsx` — authenticated candidate home:
-  - List of all applications with current stage badge
-  - Stage timeline visual (New → Screening → Interview → Offer → Result)
-  - AI score display (if stage >= Screening)
-  - Link to chat for each application
-- [ ] Create `ApplicationDetailPage.jsx`:
-  - Stage details
-  - Interview schedule (if scheduled): datetime, format, location/link
-  - AI Summary (read-only, candidate perspective)
-  - ChatBox with HR
-  - Download own CV button (via signed URL)
-- [ ] Add `candidate.routes` with ProtectedRoute `allowedRoles={['candidate']}`
-- [ ] Create `portal.api.js` — `fetchMyApplications()`, `fetchApplicationDetail(appId)`
+### TASK 25 — Candidate Portal ✅
+- [x] Trang ứng viên: `CandidatePage.jsx` (`/candidate`) — danh sách đơn, `StageTimeline.jsx` (pipeline tiếng Việt), gợi ý việc làm
+- [x] Chi tiết / chat: `CandidateApplicationReviewPage.jsx` — xem CV, form, **lịch phỏng vấn** (`GET /api/applications/:appId/interview`), `ChatPanel`
+- [x] Routes: `AppRouter.jsx` — `/candidate`, `/candidate/applications/:appId/review` + `ProtectedRoute` candidate
+- [x] `client/src/api/portal.api.js` — re-export `fetchMyApplications`, `withdrawApplication`, `fetchCvUrl`, `changeApplicationStage`, `fetchApplicationInterview` + `fetchApplicationDetail`
+> **Note:** Không còn điểm AI / AI summary — đã gỡ khỏi codebase (xem đầu file).
 
-**Acceptance:** Candidate logs in → sees all applications → can chat with HR → sees interview details.
+**Acceptance:** Candidate xem đơn, timeline, chat HR, lịch PV khi đã lên lịch.
 
 ---
 
-### TASK 26 — Admin Analytics Dashboard
-- [ ] Create aggregation queries in `application.repository.js`:
-  - `getSourceDistribution(jobId?)` — group by formData.source, count
-  - `getStageConversion()` — count per stage, calculate conversion rates
-  - `getAIvsHRAccuracy()` — compare aiScore prediction with hrFinalDecision outcomes
-  - `getDiscrepancyRate()` — count discrepancy:true / total
-- [ ] Create `AnalyticsPage.jsx`:
-  - Source distribution: pie/donut chart (recharts)
-  - Stage conversion funnel: bar chart
-  - AI accuracy: compared AI high-score vs HR selected rate
-  - Applications over time: line chart
-  - Date range filter
-- [ ] Add `GET /api/admin/analytics` endpoint (Admin only)
+### TASK 26 — Admin Analytics Dashboard ✅
+- [x] Aggregation: `server/src/repositories/analytics.repository.js` — `bySource`, `byStage`, `byDay` (21 ngày), `total` *(optional `jobId` query — service hỗ trợ)*
+- [x] **Không** triển khai metric AI vs HR / discrepancy — đã bỏ AI screening (2026-03-16)
+- [x] `AnalyticsPage.jsx` — pie (nguồn), bar (stage), line (theo ngày), recharts
+- [x] `GET /api/admin/analytics` — `admin.routes.js` + `getApplicationAnalytics` (admin only)
+- [x] Nav admin: `HR_DASH_NAV_ANALYTICS_LINK` → `/admin/analytics`
 
-**Acceptance:** Admin sees charts with real data. Source distribution shows LinkedIn vs Facebook etc.
+**Acceptance:** Admin mở `/admin/analytics` → biểu đồ dữ liệu thật (hoặc empty state).
 
 ---
 
-### TASK 27 — Job Expiry + Auto-close Cron
-- [ ] Add `expiresAt` field to Job creation form (frontend date picker)
-- [ ] Create cron job in `app.js` startup (using `node-cron`):
-  - Runs every hour
-  - Finds jobs where `status: 'open'` AND `expiresAt < now`
-  - Sets `status: 'closed'`
-  - Sends notification email to job creator (HR)
-- [ ] Show expired badge on jobs in HR dashboard
+### TASK 27 — Job Expiry + Auto-close Cron ✅
+- [x] Form `expiresAt` (`datetime-local`) trong `JobManagementPage.jsx`; PATCH gửi `expiresAt` hoặc `null` khi sửa
+- [x] Cron: `server/src/jobs/expireJobs.cron.js` + `startExpireJobsCron` trong `app.js` (mỗi giờ)
+- [x] Badge **Quá hạn** / meta hết hạn trên `JobManagementPage`; Kanban (`KanbanPage` + thẻ ứng viên) khi JD open nhưng `expiresAt` &lt; now
 
-**Acceptance:** Job with past expiresAt auto-closes. HR receives notification email.
+**Acceptance:** Job quá hạn được cron đóng; HR có email thông báo (demo — `email.service` theo implement hiện tại).
 
 ---
 
-### TASK 28 — Bulk Reject + Bulk Email
-- [ ] Add multi-select mode to `KanbanBoard.jsx`:
-  - Checkbox on each card (visible on hover or toggle mode)
-  - "Select All" in column header
-  - Floating action bar when items selected: "Reject Selected (N)"
-  - Confirm dialog: "Reject N candidates and send rejection emails?"
-- [ ] Create bulk endpoint `POST /api/applications/bulk-reject`:
-  - authenticate + authorize('hr', 'admin')
-  - Body: `{ applicationIds: [] }`
-  - For each: call stageChangeService with 'Rejected'
-  - Returns summary: `{ succeeded: N, failed: M }`
-- [ ] BullMQ: batch email jobs (one per rejected candidate)
-- [ ] Show progress indicator during bulk operation
+### TASK 28 — Bulk Reject + Bulk Email ✅
+- [x] `KanbanBoard.jsx` — chế độ **Chọn nhiều**, checkbox trên thẻ, thanh nổi **Từ chối (N)**, xác nhận, `bulkLoading`
+- [x] `POST /api/applications/bulk-reject` — body `{ jobId, applicationIds }`, `bulkRejectApplications` + stage change (email theo luồng `changeStage` hiện có)
+- [x] Progress: nút hiển thị "Đang xử lý..." trong lúc gọi API
 
-**Acceptance:** HR selects 10 CVs → bulk reject → all receive rejection email → cards move to Rejected.
+**Acceptance:** HR chọn nhiều đơn cùng job → từ chối hàng loạt → cột cập nhật sau reload.
+
+---
+
+## 6.8 UI/UX Improvements
+
+### UI/UX Polish (Improvement Phase) ✅
+- [x] Loading states chi tiết
+  - Spinner/Loading animation cho nút khi `submitting` (vd: `ApplyPage`)
+  - Skeleton screens cho các khu vực danh sách khi đang tải (Job list/job detail/candidate tasks/apps/Kanban board)
+- [x] Skeleton screens
+  - Implement `SkeletonText`, `SkeletonCard`, `SkeletonTable` trong `client/src/components/ui/`
+- [x] Error boundaries
+  - Implement `ErrorBoundary` và bọc `AppRouter` trong `client/src/App.jsx`
+- [x] Empty states
+  - Implement `EmptyState` và áp dụng cho một số trang khi không có dữ liệu (Job list/job detail/candidate tasks/apps)
+- [x] Responsive design hoàn thiện
+  - Đã có breakpoint trong `client/src/App.css` (không thêm CSS mới gây phá vỡ layout)
+- [x] Dark mode
+  - Implement theme toggle ở header (`Navbar`) + dark theme biến thể qua `html[data-theme="dark"]`
+- [x] Animations
+  - Page/container entry animation (`ui-page-enter`)
+  - Skeleton shimmer + respect `prefers-reduced-motion`
+
+---
+
+## Additional Features — Profile / Settings / Help + i18n
+
+### Account pages ✅
+- [x] Profile page (`/profile`)
+- [x] Settings page (`/settings`)
+- [x] Help/FAQ page (`/help`)
+
+### Multi-language support ✅
+- [x] i18n context (VI/EN) trong `client/src/contexts/I18nContext.jsx`
+- [x] Chuyển ngôn ngữ VI/EN cho menu (`Navbar`) và các label trong header
+- [x] Nội dung trang Profile/Settings/Help giữ nguyên tiếng Việt (không đổi theo ngôn ngữ)
 
 ---
 

@@ -1,3 +1,4 @@
+import http from 'node:http'
 import express from 'express'
 import helmet from 'helmet'
 import cors from 'cors'
@@ -8,11 +9,11 @@ import { connectDB } from './src/config/db.js'
 import { getRedisClient } from './src/config/redis.js'
 import routes from './src/routes/index.js'
 import { errorHandler } from './src/middlewares/errorHandler.js'
-import { bullBoardRouter } from './src/queues/ai.queue.js'
+import { bullBoardRouter } from './src/queues/bullBoard.js'
+import { initSocket } from './src/socket/socket.js'
 import { authenticate } from './src/middlewares/authenticate.js'
 import { allowRoles } from './src/middlewares/authorize.js'
-// Start the AI worker process
-import './src/queues/workers/ai.worker.js'
+import { startExpireJobsCron } from './src/jobs/expireJobs.cron.js'
 
 const app = express()
 
@@ -59,8 +60,17 @@ async function startServer() {
   await connectDB()
   getRedisClient()
 
-  app.listen(PORT, () => {
+  const httpServer = http.createServer(app)
+  initSocket(httpServer)
+
+  const stopExpireCron = startExpireJobsCron()
+
+  httpServer.listen(PORT, () => {
     console.log(`Server listening on port ${PORT}`)
+  })
+
+  process.on('SIGTERM', () => {
+    stopExpireCron()
   })
 }
 

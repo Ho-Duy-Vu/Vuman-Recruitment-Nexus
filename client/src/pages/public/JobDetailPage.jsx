@@ -3,14 +3,18 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 
 import { fetchJobById } from '../../api/job.api'
+import { fetchMyApplications } from '../../api/application.api'
 import { selectCurrentUser, selectIsAuthenticated } from '../../store/authSlice'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { SkeletonCard } from '../../components/ui/SkeletonCard'
 
 export function JobDetailPage() {
   const { jobId } = useParams()
   const [job, setJob] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [showApplyChoice, setShowApplyChoice] = useState(false)
+  const [myApplication, setMyApplication] = useState(null)
+  const [checkingMyApplication, setCheckingMyApplication] = useState(false)
 
   const navigate = useNavigate()
   const isAuthenticated = useSelector(selectIsAuthenticated)
@@ -32,14 +36,40 @@ export function JobDetailPage() {
     return () => { mounted = false }
   }, [jobId])
 
+  useEffect(() => {
+    if (!isAuthenticated) return
+    if (user?.role !== 'candidate') return
+    if (!jobId) return
+
+    let mounted = true
+    ;(async () => {
+      setCheckingMyApplication(true)
+      try {
+        const data = await fetchMyApplications()
+        const found = (data || []).find((a) => String(a.jobId?._id || a.jobId) === String(jobId))
+        if (mounted) setMyApplication(found || null)
+      } catch {
+        if (mounted) setMyApplication(null)
+      } finally {
+        if (mounted) setCheckingMyApplication(false)
+      }
+    })()
+
+    return () => { mounted = false }
+  }, [jobId, isAuthenticated, user?.role])
+
   const handleApplyClick = () => {
     if (!isAuthenticated) { navigate('/login'); return }
     if (user?.role === 'hr' || user?.role === 'admin') { navigate('/hr/kanban'); return }
-    setShowApplyChoice(true)
+    if (myApplication?._id) {
+      navigate(`/candidate/applications/${myApplication._id}/review`)
+      return
+    }
+    if (job?._id) navigate(`/apply/${job._id}`)
   }
 
   return (
-    <main className="career-detail-layout">
+    <main className="career-detail-layout ui-page-enter">
       <div className="jobdetail-hero">
         <div className="jobdetail-hero-inner">
           <div className="jobdetail-hero-title">Like No Place You’ve<br />Ever Worked.</div>
@@ -56,9 +86,25 @@ export function JobDetailPage() {
           ← Quay lại tin tuyển dụng
         </button>
 
-        {loading && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Đang tải thông tin công việc...</p>}
-        {error && !loading && <p className="error-text">Không thể tải thông tin công việc. Vui lòng thử lại.</p>}
-        {!loading && !error && !job && <p style={{ color: 'var(--text-muted)' }}>Không tìm thấy công việc.</p>}
+        {loading && (
+          <div className="career-empty">
+            <SkeletonCard rows={5} />
+          </div>
+        )}
+        {error && !loading && (
+          <EmptyState
+            icon="⚠️"
+            title="Không thể tải thông tin công việc"
+            description="Vui lòng thử lại sau."
+          />
+        )}
+        {!loading && !error && !job && (
+          <EmptyState
+            icon="🔎"
+            title="Không tìm thấy công việc"
+            description="Công việc có thể đã được xóa hoặc không còn hiệu lực."
+          />
+        )}
 
         {!loading && !error && job && (
           <div className="jobdetail-grid">
@@ -79,8 +125,9 @@ export function JobDetailPage() {
                       className="btn btn-primary career-detail-apply-btn"
                       type="button"
                       onClick={handleApplyClick}
+                      disabled={checkingMyApplication}
                     >
-                      Ứng tuyển
+                      {myApplication?._id ? 'Theo dõi tiến độ' : 'Apply'}
                     </button>
                   </div>
                 </div>
@@ -159,34 +206,6 @@ export function JobDetailPage() {
             </aside>
           </div>
         )}
-
-      {/* Apply choice modal */}
-      {showApplyChoice && job && (
-        <div className="apply-choice-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowApplyChoice(false) }}>
-          <div className="apply-choice-modal">
-            <button type="button" className="apply-choice-close" onClick={() => setShowApplyChoice(false)}>✕</button>
-            <h2 className="apply-choice-title">Bắt đầu hồ sơ ứng tuyển</h2>
-            <p className="apply-choice-subtitle">{job.title}</p>
-            <button
-              type="button"
-              className="btn btn-primary"
-              style={{ width: '100%', height: 48, fontSize: 15, marginBottom: 12 }}
-              onClick={() => navigate(`/apply/${job._id}`, { state: { mode: 'new' } })}
-            >
-              Nộp hồ sơ mới
-            </button>
-            <div className="apply-choice-divider" />
-            <button
-              type="button"
-              className="btn btn-secondary-blue"
-              style={{ width: '100%', height: 48, fontSize: 15, marginTop: 12 }}
-              onClick={() => navigate(`/apply/${job._id}`, { state: { mode: 'reuse' } })}
-            >
-              Dùng hồ sơ lần trước
-            </button>
-          </div>
-        </div>
-      )}
 
       {showCandidateFooter && (
         <footer className="candidate-footer-follow">
