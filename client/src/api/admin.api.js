@@ -37,3 +37,7 @@ export const fetchApplicationAnalytics = (params = {}) => {
   return api.get('/admin/analytics', { params }).then((r) => r.data.data)
 }
 
+export const exportApplicationProfilesCsv = (params = {}) => {
+  return api.get('/admin/analytics/export-csv', { params, responseType: 'blob' }).then((r) => r.data)
+}
+

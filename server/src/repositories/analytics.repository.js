@@ -85,3 +85,16 @@ export async function countTotalApplications({ jobId } = {}) {
   }
   return Application.countDocuments(q)
 }
+
+export async function findApplicationsForExport({ jobId } = {}) {
+  const query = {}
+  if (jobId && mongoose.Types.ObjectId.isValid(jobId)) {
+    query.jobId = new mongoose.Types.ObjectId(jobId)
+  }
+
+  return Application.find(query)
+    .populate('candidateId', 'fullName email phone applyProfile')
+    .populate('jobId', 'title jobCode department location')
+    .sort({ appliedAt: -1 })
+    .lean()
+}

@@ -9,6 +9,7 @@ export const CANDIDATE_INBOX_EVENT = 'candidate-inbox'
 const defaultCtx = {
   notifications: [],
   markAllRead: () => {},
+  markNotificationRead: () => {},
   socketConnected: false,
   inboxEventName: CANDIDATE_INBOX_EVENT
 }
@@ -23,6 +24,11 @@ export function CandidateInboxProvider({ children }) {
 
   const markAllRead = useCallback(() => {
     setNotifications((prev) => prev.map((x) => ({ ...x, read: true })))
+  }, [])
+
+  const markNotificationRead = useCallback((id) => {
+    if (!id) return
+    setNotifications((prev) => prev.map((x) => (x.id === id ? { ...x, read: true } : x)))
   }, [])
 
   useEffect(() => {
@@ -70,10 +76,11 @@ export function CandidateInboxProvider({ children }) {
     return {
       notifications,
       markAllRead,
+      markNotificationRead,
       socketConnected,
       inboxEventName: CANDIDATE_INBOX_EVENT
     }
-  }, [user?.role, notifications, markAllRead, socketConnected])
+  }, [user?.role, notifications, markAllRead, markNotificationRead, socketConnected])
 
   return <CandidateInboxContext.Provider value={value}>{children}</CandidateInboxContext.Provider>
 }

@@ -6,6 +6,7 @@ import { env } from '../config/env.js'
 import { AppError } from '../utils/AppError.js'
 
 const UPLOAD_ROOT = path.resolve(process.cwd(), 'uploads')
+const UPLOAD_ROOT_REL = 'uploads'
 
 export const saveCV = async (buffer, originalName, jobId, mimeType) => {
   const timestamp = Date.now()
@@ -13,16 +14,18 @@ export const saveCV = async (buffer, originalName, jobId, mimeType) => {
   const ext = path.extname(originalName || '') || ''
   const fileName = `${timestamp}-${randomHex}${ext}`
 
-  const dir = path.join(UPLOAD_ROOT, String(jobId))
+  const dirRel = path.join(UPLOAD_ROOT_REL, String(jobId))
+  const dirAbs = path.join(UPLOAD_ROOT, String(jobId))
 
-  await fs.mkdir(dir, { recursive: true })
+  await fs.mkdir(dirAbs, { recursive: true })
 
-  const filePath = path.join(dir, fileName)
+  const filePathAbs = path.join(dirAbs, fileName)
+  const filePathRel = path.join(dirRel, fileName)
 
-  await fs.writeFile(filePath, buffer)
+  await fs.writeFile(filePathAbs, buffer)
 
   return {
-    filePath,
+    filePath: filePathRel,
     fileName,
     mimeType,
     sizeBytes: buffer.length
@@ -35,14 +38,17 @@ export const saveUploadedDocument = async (buffer, originalName, dirParts = [], 
   const ext = path.extname(originalName || '') || ''
   const fileName = `${timestamp}-${randomHex}${ext}`
 
-  const dir = path.join(UPLOAD_ROOT, ...(Array.isArray(dirParts) ? dirParts : []))
-  await fs.mkdir(dir, { recursive: true })
+  const parts = Array.isArray(dirParts) ? dirParts : []
+  const dirRel = path.join(UPLOAD_ROOT_REL, ...parts)
+  const dirAbs = path.join(UPLOAD_ROOT, ...parts)
+  await fs.mkdir(dirAbs, { recursive: true })
 
-  const filePath = path.join(dir, fileName)
-  await fs.writeFile(filePath, buffer)
+  const filePathAbs = path.join(dirAbs, fileName)
+  const filePathRel = path.join(dirRel, fileName)
+  await fs.writeFile(filePathAbs, buffer)
 
   return {
-    filePath,
+    filePath: filePathRel,
     fileName,
     mimeType: detectedMimeType,
     sizeBytes: buffer.length

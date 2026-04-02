@@ -15,7 +15,7 @@ import {
   YAxis
 } from 'recharts'
 
-import { fetchApplicationAnalytics } from '../../api/admin.api'
+import { exportApplicationProfilesCsv, fetchApplicationAnalytics } from '../../api/admin.api'
 import { DashboardShell } from '../../components/dashboard/DashboardShell'
 import { HR_DASH_NAV_FULL } from '../../constants/hrDashboardNav'
 
@@ -25,6 +25,7 @@ export function AnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [data, setData] = useState(null)
+  const [exporting, setExporting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -47,6 +48,25 @@ export function AnalyticsPage() {
   const stageChart = (data?.byStage || []).map((r) => ({ name: r.stage, count: r.count }))
   const dayChart = (data?.byDay || []).map((r) => ({ date: r.date, count: r.count }))
 
+  const handleExportCsv = async () => {
+    try {
+      setExporting(true)
+      const blob = await exportApplicationProfilesCsv()
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `application-profiles-${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Không thể xuất CSV lúc này.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <DashboardShell title="Phân tích ứng tuyển (Admin)" navItems={HR_DASH_NAV_FULL}>
       <section className="career-detail-card admin-card ui-page-enter">
@@ -57,6 +77,25 @@ export function AnalyticsPage() {
           Nguồn ứng tuyển, phân bổ stage và số đơn theo ngày (21 ngày gần nhất). Tổng đơn:{' '}
           <strong>{data?.total ?? '—'}</strong>
         </p>
+        <div style={{ marginBottom: 20 }}>
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            disabled={exporting || loading}
+            style={{
+              border: '1px solid #0f766e',
+              background: exporting ? '#ccfbf1' : '#f0fdfa',
+              color: '#0f766e',
+              borderRadius: 8,
+              padding: '8px 12px',
+              fontWeight: 700,
+              cursor: exporting || loading ? 'not-allowed' : 'pointer',
+              opacity: exporting || loading ? 0.7 : 1
+            }}
+          >
+            {exporting ? 'Đang xuất CSV...' : 'Xuất CSV hồ sơ'}
+          </button>
+        </div>
 
         {loading && <p className="candidate-muted">Đang tải biểu đồ...</p>}
         {error && <p className="error-text">{error}</p>}

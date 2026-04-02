@@ -25,6 +25,26 @@ export function HelpPage() {
           <summary className="faq-summary">{t('help.q3')}</summary>
           <div className="faq-body">{t('help.a3')}</div>
         </details>
+
+        <details className="faq-item">
+          <summary className="faq-summary">{t('help.q4')}</summary>
+          <div className="faq-body">{t('help.a4')}</div>
+        </details>
+
+        <details className="faq-item">
+          <summary className="faq-summary">{t('help.q5')}</summary>
+          <div className="faq-body">{t('help.a5')}</div>
+        </details>
+
+        <details className="faq-item">
+          <summary className="faq-summary">{t('help.q6')}</summary>
+          <div className="faq-body">{t('help.a6')}</div>
+        </details>
+
+        <details className="faq-item">
+          <summary className="faq-summary">{t('help.q7')}</summary>
+          <div className="faq-body">{t('help.a7')}</div>
+        </details>
       </section>
     </main>
   )

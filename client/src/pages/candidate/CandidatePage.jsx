@@ -11,6 +11,7 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { StageTimeline } from '../../components/candidate/StageTimeline'
 import { useOpenJobsSocket } from '../../hooks/useOpenJobsSocket'
 import { useCandidateTasksSocket } from '../../hooks/useCandidateTaskSocket'
+import { CANDIDATE_INBOX_EVENT } from '../../contexts/CandidateInboxContext'
 
 const employmentTypeLabel = (v) => {
   if (v === 'full_time') return 'Full time'
@@ -152,6 +153,41 @@ export function CandidatePage() {
   }, [user?.role])
 
   useCandidateTasksSocket(reloadMyTasks)
+
+  const reloadMyApplications = useCallback(async () => {
+    if (user?.role !== 'candidate') return
+    try {
+      const data = await fetchMyApplications()
+      setApplications(data)
+    } catch {
+      /* ignore */
+    }
+  }, [user?.role])
+
+  // Khi HR chuyển giai đoạn / cập nhật lịch phỏng vấn thì backend emit `candidate:application_update`
+  // -> CandidateInboxContext sẽ dispatch `candidate-inbox`. Trang Candidate cần lắng nghe để cập nhật stage.
+  useEffect(() => {
+    if (user?.role !== 'candidate') return
+
+    let reloadTimer = null
+    const handler = (e) => {
+      const payload = e?.detail
+      if (!payload?.applicationId) return
+
+      // Throttle để tránh refetch dồn dập khi có nhiều update liên tiếp.
+      if (reloadTimer) return
+      reloadTimer = window.setTimeout(() => {
+        reloadTimer = null
+        void reloadMyApplications()
+      }, 400)
+    }
+
+    window.addEventListener(CANDIDATE_INBOX_EVENT, handler)
+    return () => {
+      window.removeEventListener(CANDIDATE_INBOX_EVENT, handler)
+      if (reloadTimer) window.clearTimeout(reloadTimer)
+    }
+  }, [user?.role, reloadMyApplications])
 
   const appliedJobIds = useMemo(() => {
     return new Set(

@@ -1,4 +1,5 @@
 import path from 'node:path'
+import fs from 'node:fs/promises'
 
 import { applicationRepository } from '../repositories/application.repository.js'
 import { fileMetadataRepository } from '../repositories/fileMetadata.repository.js'
@@ -37,11 +38,24 @@ export const serveFileController = async (req, res, next) => {
     const filePath = req.query.path
 
     const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath)
+    try {
+      await fs.access(absolutePath)
+    } catch {
+      throw new AppError('File không tồn tại', 404)
+    }
 
     res.sendFile(absolutePath, (err) => {
-      if (err) {
-        next(new AppError('Không thể tải file', 500))
+      if (!err) return
+
+      // Browser/client huỷ request khi đóng tab hoặc đổi route:
+      // không nên đẩy vào error handler vì response đã/đang gửi.
+      if (err.code === 'ECONNABORTED' || err.code === 'ECONNRESET') {
+        return
       }
+      if (res.headersSent) {
+        return
+      }
+      next(new AppError('Không thể tải file', 500))
     })
   } catch (error) {
     next(error)

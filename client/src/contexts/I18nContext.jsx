@@ -40,6 +40,17 @@ const dict = {
     'help.a2': 'HR/Admin xem toàn bộ dữ liệu form ứng tuyển và ghi chú HR (read-only đối với HR review).',
     'help.q3': 'Tôi có thể đổi ngôn ngữ không?',
     'help.a3': 'Có. Bạn có thể chuyển giữa VI/EN ở thanh điều hướng.',
+    'help.q4': 'Tôi xem nhiệm vụ của mình ở đâu và nộp file như thế nào?',
+    'help.a4':
+      'Vào trang ứng viên (`/candidate`). Ở mục “Nhiệm vụ của tôi” bạn sẽ thấy danh sách task. Bấm từng dòng để mở chi tiết, chọn loại giấy tờ và tải lên file để nộp.',
+    'help.q5': 'Tôi xem lịch phỏng vấn / thông tin cập nhật mới ở đâu?',
+    'help.a5':
+      'Theo dõi chuông thông báo trên thanh menu. Bấm vào thông báo để chuyển tới trang “Xem lại đơn đăng ký” và cuộn tới đúng khu vực có cập nhật (trạng thái hoặc lịch phỏng vấn).',
+    'help.q6': 'Tôi có thể nhắn HR qua kênh nào?',
+    'help.a6':
+      'Trên trang “Xem lại đơn đăng ký”, bạn có thể nhắn HR bằng bong bóng chat ở góc dưới bên phải màn hình (tin nhắn gắn với đúng hồ sơ ứng tuyển).',
+    'help.q7': 'Tôi được phép tải những loại file nào cho task?',
+    'help.a7': 'Hiện hệ thống chấp nhận các định dạng: `.pdf`, `.doc`, `.docx`, `.png`, `.jpg`, `.jpeg`.',
     'common.languageVI': 'VI',
     'common.languageEN': 'EN'
   },
@@ -80,6 +91,17 @@ const dict = {
     'help.a2': 'HR/Admin can view the full application form data and HR notes (read-only for review).',
     'help.q3': 'Can I change the language?',
     'help.a3': 'Yes. Use the language switch in the navigation bar.',
+    'help.q4': 'Where can I see my tasks and upload documents?',
+    'help.a4':
+      'Open the Candidate page (`/candidate`). In “My Tasks”, click a task row to expand details, choose the document type, then upload the file to submit.',
+    'help.q5': 'Where do I find interview schedules / latest updates?',
+    'help.a5':
+      'Use the notification bell in the top menu. Click a notification to go to “Review Application” and scroll to the exact updated section (status or interview schedule).',
+    'help.q6': 'How can I message HR?',
+    'help.a6':
+      'On the “Review Application” page, use the chat bubble at the bottom-right corner to message HR (messages are tied to your application).',
+    'help.q7': 'What file types are allowed for task uploads?',
+    'help.a7': 'The system currently accepts: `.pdf`, `.doc`, `.docx`, `.png`, `.jpg`, `.jpeg`.',
     'common.languageVI': 'VI',
     'common.languageEN': 'EN'
   }

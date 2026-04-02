@@ -3,7 +3,8 @@ import {
   aggregateApplicationsByDay,
   aggregateApplicationsBySource,
   aggregateApplicationsByStage,
-  countTotalApplications
+  countTotalApplications,
+  findApplicationsForExport
 } from '../repositories/analytics.repository.js'
 import { AppError } from '../utils/AppError.js'
 import { hashPassword } from './auth.service.js'
@@ -108,4 +109,64 @@ export const getApplicationAnalytics = async ({ jobId } = {}) => {
     byDay: byDay.map((r) => ({ date: r._id, count: r.count })),
     total
   }
+}
+
+const csvEscape = (value) => {
+  if (value === null || typeof value === 'undefined') return ''
+  const text = String(value).replace(/"/g, '""')
+  return `"${text}"`
+}
+
+export const exportApplicationProfilesCsv = async ({ jobId } = {}) => {
+  const applications = await findApplicationsForExport({ jobId })
+  const header = [
+    'Applied At',
+    'Stage',
+    'Candidate Name',
+    'Candidate Email',
+    'Candidate Phone',
+    'Source',
+    'Skills',
+    'City',
+    'Country',
+    'University',
+    'Degree Level',
+    'Graduation Year',
+    'LinkedIn',
+    'Portfolio',
+    'Job Code',
+    'Job Title',
+    'Department',
+    'Location'
+  ]
+
+  const rows = applications.map((app) => {
+    const form = app.formData || {}
+    const profile = app.candidateId?.applyProfile || {}
+
+    return [
+      app.appliedAt ? new Date(app.appliedAt).toISOString() : '',
+      app.stage || '',
+      app.formData?.fullName || app.candidateId?.fullName || '',
+      app.candidateId?.email || '',
+      form.phoneNumber || app.candidateId?.phone || profile.phoneNumber || '',
+      form.source || profile.source || '',
+      form.skills || profile.skills || '',
+      form.city || profile.city || '',
+      form.country || profile.country || '',
+      form.university || profile.university || '',
+      form.degreeLevel || profile.degreeLevel || '',
+      form.graduationYear || profile.graduationYear || '',
+      form.linkedinUrl || profile.linkedinUrl || '',
+      form.portfolioUrl || profile.portfolioUrl || '',
+      app.jobId?.jobCode || '',
+      app.jobId?.title || '',
+      app.jobId?.department || '',
+      app.jobId?.location || ''
+    ]
+      .map(csvEscape)
+      .join(',')
+  })
+
+  return [header.map(csvEscape).join(','), ...rows].join('\n')
 }

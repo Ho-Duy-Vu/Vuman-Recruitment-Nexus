@@ -9,7 +9,8 @@ import {
   updateCandidateController,
   updateHRController,
   listUsersController,
-  getAnalyticsController
+  getAnalyticsController,
+  exportAnalyticsCsvController
 } from '../controllers/admin.controller.js'
 import { authenticate } from '../middlewares/authenticate.js'
 import { allowRoles } from '../middlewares/authorize.js'
@@ -26,6 +27,7 @@ const router = express.Router()
 router.use(authenticate, allowRoles('admin'))
 
 router.get('/analytics', getAnalyticsController)
+router.get('/analytics/export-csv', exportAnalyticsCsvController)
 
 router.post('/hr', validate(createHrSchema), createHRController)
 router.get('/hr', listHRController)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 
 import api from '../../api/axios.instance'
@@ -50,6 +50,7 @@ const statusInterviewLabel = (s) => {
 export function CandidateApplicationReviewPage() {
   const { appId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const user = useSelector(selectCurrentUser)
 
   const [application, setApplication] = useState(null)
@@ -114,6 +115,21 @@ export function CandidateApplicationReviewPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // Nếu URL có hash (vd: #section-interviews), sau khi load xong sẽ scroll tới khu vực đó.
+  useEffect(() => {
+    if (!application) return
+    const hash = location.hash || ''
+    if (!hash.startsWith('#')) return
+    const id = hash.slice(1)
+    if (!id) return
+    const el = document.getElementById(id)
+    if (!el) return
+    const t = window.setTimeout(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 80)
+    return () => window.clearTimeout(t)
+  }, [application, location.hash])
 
   const { socketConnected } = useCandidateInbox()
 
@@ -214,7 +230,9 @@ export function CandidateApplicationReviewPage() {
             </div>
 
             <div style={{ marginTop: 16 }} className="candidate-card">
-              <div style={{ fontWeight: 800, color: 'var(--text-primary)', marginBottom: 10 }}>Lời nhắn của ứng viên / Ghi chú HR</div>
+              <div style={{ fontWeight: 800, color: 'var(--text-primary)', marginBottom: 10 }} id="section-notes">
+                Lời nhắn của ứng viên / Ghi chú HR
+              </div>
               <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
                 <div>
                   <strong style={{ color: 'var(--text-primary)' }}>Lời nhắn:</strong> {form.messageToHR || '-'}
@@ -227,7 +245,7 @@ export function CandidateApplicationReviewPage() {
           </section>
 
           <aside style={{ flex: '1 1 0', minWidth: 0 }}>
-            <div className="candidate-card" style={{ marginBottom: 14 }}>
+            <div className="candidate-card" style={{ marginBottom: 14 }} id="section-interviews">
               <div style={{ fontWeight: 800, color: 'var(--text-primary)', marginBottom: 10 }}>
                 Lịch phỏng vấn {visibleInterviews.length > 0 ? `(${visibleInterviews.length})` : ''}
               </div>
@@ -286,7 +304,7 @@ export function CandidateApplicationReviewPage() {
               )}
             </div>
 
-            <div className="candidate-card">
+            <div className="candidate-card" id="section-stage">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10 }}>
                 <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>Thông tin ứng viên</div>
                 <span

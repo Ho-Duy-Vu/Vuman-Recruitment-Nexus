@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { AiFillBell } from 'react-icons/ai'
+import { useNavigate } from 'react-router-dom'
+
+import { useCandidateInbox } from '../../contexts/CandidateInboxContext'
 
 /**
  * Chuông + dropdown — dữ liệu từ `CandidateInboxContext` (thanh menu).
@@ -7,6 +10,8 @@ import { AiFillBell } from 'react-icons/ai'
 export function CandidateNotificationBell({ notifications = [], onMarkAllRead }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
+  const navigate = useNavigate()
+  const candidateInbox = useCandidateInbox()
 
   useEffect(() => {
     const onDoc = (e) => {
@@ -17,6 +22,21 @@ export function CandidateNotificationBell({ notifications = [], onMarkAllRead })
   }, [])
 
   const unread = notifications.filter((x) => !x.read).length
+
+  const handleOpenNotification = (n) => {
+    // Close dropdown first for better UX.
+    setOpen(false)
+
+    candidateInbox?.markNotificationRead?.(n?.id)
+
+    const applicationId = n?.applicationId
+    if (!applicationId) return
+
+    const hash =
+      n?.kind === 'interview' ? '#section-interviews' : n?.kind === 'stage' ? '#section-stage' : '#section-stage'
+
+    navigate(`/candidate/applications/${applicationId}/review${hash}`)
+  }
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
@@ -100,15 +120,25 @@ export function CandidateNotificationBell({ notifications = [], onMarkAllRead })
             </p>
           )}
           {notifications.map((n) => (
-            <div
+            <button
               key={n.id}
+              type="button"
+              onClick={() => handleOpenNotification(n)}
               style={{
+                width: '100%',
+                textAlign: 'left',
                 padding: '10px 8px',
                 borderRadius: 8,
                 marginBottom: 6,
                 background: n.read ? 'transparent' : 'rgba(99,102,241,0.08)',
-                borderBottom: '1px solid var(--border-light)'
+                borderBottom: '1px solid var(--border-light)',
+                borderLeft: 'none',
+                borderRight: 'none',
+                borderTop: 'none',
+                cursor: 'pointer',
+                color: 'inherit'
               }}
+              aria-label={`Mở thông báo: ${n.title || 'thông báo'}`}
             >
               <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-primary)' }}>{n.title}</div>
               {n.message ? (
@@ -117,7 +147,7 @@ export function CandidateNotificationBell({ notifications = [], onMarkAllRead })
               <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 6 }}>
                 {new Date(n.at).toLocaleString('vi-VN')}
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}
