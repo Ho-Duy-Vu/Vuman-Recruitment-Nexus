@@ -5,9 +5,46 @@ import { logoutApi } from '../../api/auth.api'
 import { useTheme } from '../../hooks/useTheme'
 import { useI18n } from '../../contexts/I18nContext'
 import { useEffect, useRef, useState } from 'react'
+import logoCompany from '../../assets/logo_company.png'
 
 import { CandidateNotificationBell } from '../candidate/CandidateNotificationBell'
 import { useCandidateInbox } from '../../contexts/CandidateInboxContext'
+
+function ThemeSunIcon() {
+  const rays = [0, 45, 90, 135, 180, 225, 270, 315]
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="2" />
+      {rays.map((deg) => (
+        <line
+          key={deg}
+          x1="12"
+          y1="2"
+          x2="12"
+          y2="5"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          transform={`rotate(${deg} 12 12)`}
+        />
+      ))}
+    </svg>
+  )
+}
+
+function ThemeMoonIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
 
 export function Navbar() {
   const candidateInbox = useCandidateInbox()
@@ -50,10 +87,7 @@ export function Navbar() {
       <div className="navbar-left">
         <Link to="/jobs" className="navbar-brand">
           <div className="navbar-logo">
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-              <rect x="2" y="2" width="24" height="24" rx="4" fill="none" stroke="#0d6e56" strokeWidth="2.5"/>
-              <text x="14" y="20" textAnchor="middle" fill="#0d6e56" fontSize="13" fontWeight="700" fontFamily="sans-serif">V</text>
-            </svg>
+            <img src={logoCompany} alt="Vuman logo" className="navbar-logo-img" />
           </div>
           <span className="navbar-brand-text">Vuman Careers</span>
         </Link>
@@ -99,10 +133,10 @@ export function Navbar() {
           type="button"
           className="navbar-theme-toggle"
           onClick={toggleTheme}
-          aria-label="Chuyển chế độ giao diện"
+          aria-label={theme === 'dark' ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
           title={theme === 'dark' ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
         >
-          {theme === 'dark' ? t('theme.light') : t('theme.dark')}
+          {theme === 'dark' ? <ThemeSunIcon /> : <ThemeMoonIcon />}
         </button>
 
         {user?.email ? (

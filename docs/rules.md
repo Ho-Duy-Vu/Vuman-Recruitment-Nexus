@@ -17,6 +17,19 @@
 
 ---
 
+## 0.2 Candidate inbox notifications (MongoDB + Socket)
+
+**Cập nhật:** 2026-04-07 — lịch sử thông báo ứng viên (chuông menu) lưu trong DB, đồng bộ với FE.
+
+| Khu vực | Nội dung |
+|--------|-----------|
+| **Model** | `server/src/models/CandidateNotification.model.js` — `candidateId`, `applicationId`, `kind`, `title`, `message`, `at`, `read` |
+| **API** | `GET /api/candidate/notifications` (candidate only), `PATCH .../:notificationId/read`, `PATCH .../read-all` — xem `candidateNotification.routes.js` |
+| **Realtime** | `notifyCandidateApplication` trong `socket/candidateNotify.js` tạo bản ghi qua `createCandidateNotificationRecord`, sau đó `emit('candidate:application_update', { ..., notificationId })` tới room `application:{id}` và `candidate:{candidateId}` |
+| **FE** | `client/src/api/candidateNotification.api.js` + `CandidateInboxContext.jsx` — hydrate từ API, merge với socket, mark-read gọi PATCH |
+
+---
+
 ## 0. PRIME DIRECTIVE
 
 You are a Senior Fullstack Engineer building a production-grade ATS (Applicant Tracking System).

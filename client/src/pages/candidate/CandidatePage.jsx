@@ -12,6 +12,8 @@ import { StageTimeline } from '../../components/candidate/StageTimeline'
 import { useOpenJobsSocket } from '../../hooks/useOpenJobsSocket'
 import { useCandidateTasksSocket } from '../../hooks/useCandidateTaskSocket'
 import { CANDIDATE_INBOX_EVENT } from '../../contexts/CandidateInboxContext'
+import logoCompany from '../../assets/logo_company.png'
+import careerSidebarImage from '../../assets/career_sidebar.jpg'
 
 const employmentTypeLabel = (v) => {
   if (v === 'full_time') return 'Full time'
@@ -514,15 +516,14 @@ export function CandidatePage() {
         {/* Right column */}
         <aside className="candidate-right-col">
           <section className="candidate-card candidate-about-card">
-            <div className="candidate-about-title">Giới thiệu</div>
-            <div className="candidate-about-media">
-              Video / Hình ảnh
-            </div>
+            <img src={logoCompany} alt="Vuman logo" className="candidate-about-logo" />
+            <div className="candidate-about-title">Welcome to Vuman Careers</div>
+            <div className="candidate-about-subtitle">Build with people. Grow with impact.</div>
+            <img src={careerSidebarImage} alt="Vuman workplace" className="candidate-about-media" />
             <div className="candidate-about-body">
-              Vuman cung cấp giải pháp <strong>software solution system ERP</strong> tích hợp cho quy trình tuyển dụng,
-              quản lý dữ liệu ứng viên và vận hành hệ thống HRM/ATS hiệu quả.
+              Vuman phát triển nền tảng tuyển dụng hiện đại, kết nối trải nghiệm ứng viên với hiệu quả vận hành cho HR trong một hệ thống thống nhất.
               <div style={{ marginTop: 12 }}>
-                <a href="https://example.com" target="_blank" rel="noreferrer" className="candidate-about-link">
+                <a href="/about" className="candidate-about-link">
                   Xem thêm →
                 </a>
               </div>

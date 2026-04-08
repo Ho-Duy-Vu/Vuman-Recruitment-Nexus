@@ -19,6 +19,20 @@
 
 ---
 
+## CHANGELOG — Thông báo ứng viên lưu server (2026-04-07)
+
+**Mục đích:** đồng bộ lịch sử inbox giữa backend và frontend; F5 / chạy lại dự án không mất thông báo (dữ liệu trong MongoDB).
+
+**Code đã bổ sung (tóm tắt):**
+
+- **BE:** `CandidateNotification.model.js`, `candidateNotification.repository.js`, `candidateNotification.service.js`, `candidateNotification.controller.js`, `candidateNotification.routes.js`; đăng ký route trong `routes/index.js`. `notifyCandidateApplication` (`socket/candidateNotify.js`) tạo bản ghi trước khi emit Socket; payload có thêm `notificationId` (ObjectId).
+- **FE:** `api/candidateNotification.api.js`; `CandidateInboxContext` — tải danh sách khi đăng nhập candidate, merge với realtime; đánh dấu đọc gọi API (`PATCH read` / `read-all`).
+- **Docs:** `README.md` (bảng API), `rules.md` (mô tả luồng).
+
+**Nghiệm thu:** Ứng viên đăng nhập → `GET /api/candidate/notifications` trả về lịch sử; sau khi HR cập nhật hồ sơ, có bản ghi mới + Socket; đọc thông báo cập nhật DB.
+
+---
+
 ## Cách dùng file này
 
 1. Làm task **theo đúng thứ tự** — task sau có thể phụ thuộc task trước  

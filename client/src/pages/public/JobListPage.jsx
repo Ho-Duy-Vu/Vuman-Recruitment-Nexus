@@ -7,6 +7,9 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { SkeletonTable } from '../../components/ui/SkeletonTable'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { useOpenJobsSocket } from '../../hooks/useOpenJobsSocket'
+import logoCompany from '../../assets/logo_company.png'
+import careerSidebarImage from '../../assets/career_sidebar.jpg'
+import careerHeroImage from '../../assets/career_hero.png'
 
 const distinctDepartments = (jobs) => {
   const set = new Set()
@@ -93,7 +96,7 @@ export function JobListPage() {
   return (
     <main className="career-layout ui-page-enter">
       {/* Hero */}
-      <div className="career-hero">
+      <div className="career-hero career-hero--banner" style={{ backgroundImage: `url(${careerHeroImage})` }}>
         <div className="career-hero-inner">
           <div>
             <h1 className="career-hero-title">Công nghệ xuất sắc,<br />tầm nhìn vượt trội™</h1>
@@ -242,10 +245,15 @@ export function JobListPage() {
         {/* Sidebar */}
         <aside className="career-job-sidebar">
           <div className="career-sidebar-card">
-            <div className="career-sidebar-logo">V</div>
-            <p className="career-sidebar-title">Không tìm thấy vị trí phù hợp?</p>
+            <img src={logoCompany} alt="Vuman logo" className="career-sidebar-logo" />
+            <p className="career-sidebar-title">Welcome to Vuman Careers</p>
+            <p className="career-sidebar-subtitle">Build with people. Grow with impact.</p>
+            <img src={careerSidebarImage} alt="Vuman workplace" className="career-sidebar-banner" />
             <p className="career-sidebar-body">
-              Đăng ký nhận thông báo khi có cơ hội mới tại Vuman. Chúng tôi sẽ liên hệ khi có vị trí phù hợp với bạn.
+              Vuman là môi trường công nghệ đề cao tinh thần học hỏi, ownership và hợp tác liên phòng ban. Chúng tôi xây dựng sản phẩm tuyển dụng lấy trải nghiệm ứng viên và hiệu quả vận hành của HR làm trọng tâm.
+            </p>
+            <p className="career-sidebar-body">
+              Nếu bạn yêu thích các bài toán thực tế về sản phẩm, dữ liệu và trải nghiệm người dùng, hãy theo dõi các vị trí mở để đồng hành cùng đội ngũ.
             </p>
           </div>
         </aside>

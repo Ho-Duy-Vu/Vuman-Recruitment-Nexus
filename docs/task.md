@@ -8,6 +8,8 @@
 
 > **2026-03-16 — AI CV screening removed:** Gemini, `ai_screening` queue, `AIEvaluation`, `AIScoreCard`, `aiStatus`, and related API/tests were deleted. See **task.vi.md CHANGELOG** and **rules.md §0.1**. Sections below that still mention AI are **historical** unless updated.
 
+> **2026-04-07 — Candidate inbox notifications persisted (MongoDB):** Model `CandidateNotification`, REST routes under `/api/candidate/notifications`, `notifyCandidateApplication` saves a row then emits socket payload with `notificationId`. Frontend loads inbox via API and merges with realtime. See **task.vi.md CHANGELOG** and **README.md** (API table).
+
 ---
 
 ## HOW TO USE THIS FILE

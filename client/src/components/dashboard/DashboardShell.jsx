@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import { NavLink } from 'react-router-dom'
+import logoCompany from '../../assets/logo_company.png'
 
 const EMPTY_NAV = Object.freeze([])
 
@@ -10,7 +11,7 @@ export const DashboardShell = memo(function DashboardShell({ title, navItems, ch
       <aside className="hybrid-dash-sidebar">
         <div className="hybrid-dash-sidebar-brand">
           <div className="hybrid-dash-sidebar-logo">
-            <span>V</span>
+            <img src={logoCompany} alt="Vuman logo" className="hybrid-dash-sidebar-logo-img" />
           </div>
           <div className="hybrid-dash-sidebar-brand-text">Vuman Dashboard</div>
         </div>

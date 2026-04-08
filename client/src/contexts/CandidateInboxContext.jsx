@@ -1,10 +1,30 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useSelector } from 'react-redux'
 
+import {
+  fetchCandidateNotifications,
+  markAllCandidateNotificationsReadApi,
+  markCandidateNotificationReadApi
+} from '../api/candidateNotification.api'
 import { selectAccessToken, selectCurrentUser } from '../store/authSlice'
 import { createAppSocket } from '../utils/socketClient'
 
 export const CANDIDATE_INBOX_EVENT = 'candidate-inbox'
+
+const INBOX_MAX = 80
+
+function mergeNotificationsById(serverList, localList) {
+  const map = new Map()
+  for (const s of serverList || []) {
+    if (s?.id) map.set(s.id, { ...s })
+  }
+  for (const l of localList || []) {
+    if (l?.id && !map.has(l.id)) map.set(l.id, { ...l })
+  }
+  return Array.from(map.values())
+    .sort((a, b) => String(b.at).localeCompare(String(a.at)))
+    .slice(0, INBOX_MAX)
+}
 
 const defaultCtx = {
   notifications: [],
@@ -22,18 +42,50 @@ export function CandidateInboxProvider({ children }) {
   const [notifications, setNotifications] = useState([])
   const [socketConnected, setSocketConnected] = useState(false)
 
-  const markAllRead = useCallback(() => {
+  useEffect(() => {
+    if (user?.role !== 'candidate') {
+      setNotifications([])
+      return
+    }
+    if (!token) {
+      setNotifications([])
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const items = await fetchCandidateNotifications()
+        if (!cancelled) {
+          setNotifications((prev) => mergeNotificationsById(Array.isArray(items) ? items : [], prev))
+        }
+      } catch {
+        if (!cancelled) setNotifications((prev) => prev)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [user?.role, user?._id, user?.id, token])
+
+  const markAllRead = useCallback(async () => {
+    try {
+      await markAllCandidateNotificationsReadApi()
+    } catch {
+      /* vẫn cập nhật FE */
+    }
     setNotifications((prev) => prev.map((x) => ({ ...x, read: true })))
   }, [])
 
-  const markNotificationRead = useCallback((id) => {
+  const markNotificationRead = useCallback(async (id) => {
     if (!id) return
+    try {
+      await markCandidateNotificationReadApi(id)
+    } catch {
+      /* vẫn cập nhật FE */
+    }
     setNotifications((prev) => prev.map((x) => (x.id === id ? { ...x, read: true } : x)))
   }, [])
 
   useEffect(() => {
     if (user?.role !== 'candidate' || !token) {
-      setNotifications([])
       setSocketConnected(false)
       return
     }
@@ -49,10 +101,17 @@ export function CandidateInboxProvider({ children }) {
       const message = payload?.message || ''
       const at = payload?.at || new Date().toISOString()
       const applicationId = payload?.applicationId
-      const id = `${at}-${kind}-${Math.random().toString(36).slice(2, 9)}`
-      setNotifications((prev) =>
-        [{ id, kind, title, message, at, read: false, applicationId }, ...prev].slice(0, 80)
-      )
+      const id =
+        payload?.notificationId ||
+        `${at}-${kind}-${Math.random().toString(36).slice(2, 9)}`
+
+      setNotifications((prev) => {
+        if (prev.some((x) => x.id === id)) {
+          return prev
+        }
+        const row = { id, kind, title, message, at, read: false, applicationId }
+        return [row, ...prev].slice(0, INBOX_MAX)
+      })
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent(CANDIDATE_INBOX_EVENT, { detail: payload }))
       }

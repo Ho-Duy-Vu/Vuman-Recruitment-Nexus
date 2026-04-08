@@ -1,0 +1,11 @@
+{
+  "name": "vuman-baocao-docx",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node generate-bao-cao.mjs"
+  },
+  "dependencies": {
+    "docx": "^9.5.1"
+  }
+}

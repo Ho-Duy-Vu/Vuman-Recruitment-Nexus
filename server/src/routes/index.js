@@ -8,6 +8,7 @@ import filesRoutes from './files.routes.js'
 import candidateTasksRoutes from './candidateTasks.routes.js'
 import chatRoutes from './chat.routes.js'
 import hrInterviewRoutes from './hrInterview.routes.js'
+import candidateNotificationRoutes from './candidateNotification.routes.js'
 
 const router = express.Router()
 
@@ -23,5 +24,6 @@ router.use('/', filesRoutes)
 router.use('/', candidateTasksRoutes)
 router.use('/', chatRoutes)
 router.use('/', hrInterviewRoutes)
+router.use('/', candidateNotificationRoutes)
 
 export default router
